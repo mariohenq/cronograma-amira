@@ -113,7 +113,10 @@ th,td{border:1px solid #e0dfd8;padding:0;}
 .ghdr td{background:#e8e7e0;padding:5px 10px;font-size:11px;font-weight:600;color:#5a5a52;text-transform:uppercase;letter-spacing:.06em;}
 .ghdr .cd{background:#e8e7e0;}
 .cday.we{color:#c08080;background:#fce8e8;}
+.cday.fer{color:#c08080;background:#fce8e8;} /* feriado same as weekend */
 .cday.tod{color:#b83030!important;background:#fde8e8!important;font-weight:700;border-left:2px solid #c0392b!important;border-right:2px solid #c0392b!important;}
+.print-summary{display:none;}
+@media print{.print-summary{display:block!important;}}
 
 /* CELLS */
 .cell{text-align:center;vertical-align:middle;min-width:26px;width:26px;height:32px;position:relative;}
@@ -238,22 +241,51 @@ th,td{border:1px solid #e0dfd8;padding:0;}
 <!-- EDIT MODAL -->
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal">
-    <h3>Editar célula</h3>
+    <h3 id="modal-title">Editar célula</h3>
     <div class="modal-info" id="modal-info"></div>
-    <label>Tipo</label>
+    <div id="modal-feriado-warn" style="display:none;background:#faecd0;border:1px solid #f0d090;border-radius:4px;padding:6px 10px;font-size:12px;color:#c07a10;margin-bottom:12px;">
+      ⚠ Este dia é feriado ou fim de semana. Inserir aqui sobrepõe o calendário padrão.
+    </div>
+    <label>Tipo de atividade</label>
     <select id="modal-type">
       <option value="">— remover célula —</option>
-      <option value="F">Fábrica</option>
+      <option value="F">Fábrica / Produção</option>
       <option value="I">Instalação em obra</option>
       <option value="R">Regulagem</option>
-      <option value="P">Replanejamento IV</option>
+      <option value="P">Replanejamento</option>
     </select>
-    <label>Pavimento <span style="font-weight:400;color:#aaa;">(0 = trecho/sem número)</span></label>
-    <input type="number" id="modal-pav" min="0" max="20" value="0">
+    <label>Pavimento <span style="font-weight:400;color:#aaa;">(0 = trecho/sem número · texto = ex: SS)</span></label>
+    <input type="text" id="modal-pav" placeholder="ex: 2, SS, ou deixe 0" value="0" style="width:100%;padding:7px 10px;border:1px solid #c8c7be;border-radius:5px;font-size:13px;font-family:'IBM Plex Sans',sans-serif;color:#1a1a18;background:#fff;margin-bottom:14px;">
     <div class="modal-btns">
-      <button class="btn save" onclick="modalSave()">Salvar</button>
-      <button class="btn del" onclick="modalDelete()">Remover</button>
+      <button class="btn save" onclick="modalSave()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="20 6 9 17 4 12"/></svg>
+        Salvar
+      </button>
+      <button class="btn del" onclick="modalDelete()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        Remover
+      </button>
       <button class="btn cancel" onclick="modalClose()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CALENDAR DATE MODAL -->
+<div class="modal-overlay" id="cal-overlay">
+  <div class="modal" style="max-width:380px;">
+    <h3 id="cal-title">Editar datas do calendário</h3>
+    <div style="font-size:12px;color:#9a9a90;margin-bottom:16px;" id="cal-company"></div>
+    <label>Data de início</label>
+    <input type="date" id="cal-start" style="width:100%;padding:7px 10px;border:1px solid #c8c7be;border-radius:5px;font-size:13px;font-family:'IBM Plex Sans',sans-serif;color:#1a1a18;background:#fff;margin-bottom:14px;">
+    <label>Data de término</label>
+    <input type="date" id="cal-end" style="width:100%;padding:7px 10px;border:1px solid #c8c7be;border-radius:5px;font-size:13px;font-family:'IBM Plex Sans',sans-serif;color:#1a1a18;background:#fff;margin-bottom:6px;">
+    <div style="font-size:11px;color:#9a9a90;margin-bottom:14px;">Fins de semana e feriados de Curitiba são automaticamente marcados em vermelho. Células de atividade fora do período serão mantidas mas não exibidas.</div>
+    <div class="modal-btns">
+      <button class="btn save" onclick="calSave()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="20 6 9 17 4 12"/></svg>
+        Aplicar
+      </button>
+      <button class="btn cancel" onclick="calClose()">Cancelar</button>
     </div>
   </div>
 </div>
@@ -296,8 +328,12 @@ th,td{border:1px solid #e0dfd8;padding:0;}
     <div class="co-banner urban">
       <div class="co-banner-left">
         <div class="co-name">URBAN</div>
-        <div class="co-scope">Pele de vidro térreo · Esquadrias integradas · Janelas · Varandas · Regulagem · Lavanderia &nbsp;|&nbsp; Contrato 04 &nbsp;|&nbsp; 24/04/2026 – 23/06/2026</div>
+        <div class="co-scope">Pele de vidro térreo · Esquadrias integradas · Janelas · Varandas · Regulagem · Lavanderia &nbsp;|&nbsp; Contrato 04 &nbsp;|&nbsp; <span id="urban-period">24/04/2026 – 23/06/2026</span></div>
       </div>
+      <button class="btn edit-off" id="cal-btn-urban" style="display:none;" onclick="openCalModal('urban')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Editar período
+      </button>
     </div>
     <div class="kpi-bar" id="kpi-urban"></div>
     <div class="alerts-wrap">
@@ -336,8 +372,12 @@ th,td{border:1px solid #e0dfd8;padding:0;}
     <div class="co-banner smd">
       <div class="co-banner-left">
         <div class="co-name">SMD</div>
-        <div class="co-scope">Oscilo batente · Guarda corpo · Muro de vidro · Pele guarita · Brises · Venezianas / Subsolos &nbsp;|&nbsp; 18/05/2026 – 30/07/2026</div>
+        <div class="co-scope">Oscilo batente · Guarda corpo · Muro de vidro · Pele guarita · Brises · Venezianas / Subsolos &nbsp;|&nbsp; <span id="smd-period">18/05/2026 – 30/07/2026</span></div>
       </div>
+      <button class="btn edit-off" id="cal-btn-smd" style="display:none;" onclick="openCalModal('smd')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Editar período
+      </button>
     </div>
     <div class="kpi-bar" id="kpi-smd"></div>
     <div class="alerts-wrap">
@@ -386,8 +426,21 @@ const TODAY=new Date();TODAY.setHours(0,0,0,0);
 function isPast(dobj){const t=new Date(dobj.date);t.setHours(0,0,0,0);return t<TODAY;}
 function todayIdx(days){return days.findIndex(x=>{const t=new Date(x.date);t.setHours(0,0,0,0);return t.getTime()===TODAY.getTime();});}
 
-const U=makeDays(2026,3,24,2026,5,23);
-const S=makeDays(2026,4,18,2026,6,30);
+// ─── CALENDÁRIOS (mutáveis) ──────────────────────────────────────────────────
+// Datas-limite salvas no estado para persistir adições/remoções
+let calBounds = {
+  U: { y0:2026,m0:3,d0:24, y1:2026,m1:5,d1:23 },
+  S: { y0:2026,m0:4,d0:18, y1:2026,m1:6,d1:30 },
+};
+function rebuildDays(){
+  const b=calBounds.U; Object.assign(U,makeDays(b.y0,b.m0,b.d0,b.y1,b.m1,b.d1)); U.length=makeDays(b.y0,b.m0,b.d0,b.y1,b.m1,b.d1).length;
+  const bs=calBounds.S; Object.assign(S,makeDays(bs.y0,bs.m0,bs.d0,bs.y1,bs.m1,bs.d1)); S.length=makeDays(bs.y0,bs.m0,bs.d0,bs.y1,bs.m1,bs.d1).length;
+}
+// Initialize as proper arrays
+const _uDays=makeDays(2026,3,24,2026,5,23);
+const _sDays=makeDays(2026,4,18,2026,6,30);
+const U=_uDays.slice();
+const S=_sDays.slice();
 const U_TOD=todayIdx(U);
 const S_TOD=todayIdx(S);
 
@@ -395,34 +448,62 @@ const S_TOD=todayIdx(S);
 function pavSlots(days,iArr,rArr,iStart,rStart){
   const sl=new Array(days.length).fill(null);
   let pi=0,wd=0;
-  for(let i=0;i<days.length;i++){if(!isWE(days[i])){if(wd>=iStart&&pi<iArr.length)sl[i]={t:'I',p:iArr[pi++]};wd++;}}
+  for(let i=0;i<days.length;i++){if(!isNonWorkday(days[i])){if(wd>=iStart&&pi<iArr.length)sl[i]={t:'I',p:iArr[pi++]};wd++;}}
   pi=0;wd=0;
-  for(let i=0;i<days.length;i++){if(!isWE(days[i])){if(wd>=rStart&&pi<rArr.length&&!sl[i])sl[i]={t:'R',p:rArr[pi++]};wd++;}}
+  for(let i=0;i<days.length;i++){if(!isNonWorkday(days[i])){if(wd>=rStart&&pi<rArr.length&&!sl[i])sl[i]={t:'R',p:rArr[pi++]};wd++;}}
   return sl;
 }
 function peleSlots(days,faixas){
   const sl=new Array(days.length).fill(null);
   faixas.forEach(([skip,cnt,tp])=>{
     let s=skip,c=cnt;
-    for(let i=0;i<days.length;i++){if(isWE(days[i]))continue;if(s>0){s--;continue;}if(c<=0)break;sl[i]={t:tp,p:1};c--;}
+    for(let i=0;i<days.length;i++){if(isNonWorkday(days[i]))continue;if(s>0){s--;continue;}if(c<=0)break;sl[i]={t:tp,p:1};c--;}
   });
   return sl;
 }
 function trechoSlots(days,wdStart,wdEnd){
   const sl=new Array(days.length).fill(null);
   let wd=0;
-  for(let i=0;i<days.length;i++){if(!isWE(days[i])){if(wd>=wdStart&&wd<wdEnd)sl[i]={t:'I',p:null};wd++;}}
+  for(let i=0;i<days.length;i++){if(!isNonWorkday(days[i])){if(wd>=wdStart&&wd<wdEnd)sl[i]={t:'I',p:null};wd++;}}
   return sl;
 }
 
-// ─── DATE-RANGE SLOT BUILDER ─────────────────────────────────────────────────
+// ─── FERIADOS CURITIBA 2026 ──────────────────────────────────────────────────
+// Nacionais + Municipais de Curitiba-PR
+const FERIADOS_2026 = new Set([
+  // Nacionais
+  '2026-01-01', // Confraternização Universal
+  '2026-02-16', // Carnaval (segunda)
+  '2026-02-17', // Carnaval (terça)
+  '2026-02-18', // Quarta de Cinzas (meio dia)
+  '2026-04-03', // Sexta-feira Santa (Páscoa 05/04)
+  '2026-04-21', // Tiradentes
+  '2026-05-01', // Dia do Trabalho
+  '2026-05-20', // Corpus Christi (qui - 60 dias após Páscoa)
+  '2026-09-07', // Independência do Brasil
+  '2026-10-12', // Nossa Senhora Aparecida
+  '2026-11-02', // Finados
+  '2026-11-15', // Proclamação da República
+  '2026-11-20', // Consciência Negra
+  '2026-12-25', // Natal
+  // Municipais de Curitiba
+  '2026-03-29', // Aniversário de Curitiba (329 anos)
+  '2026-09-08', // Nossa Senhora da Luz dos Pinhais (padroeira)
+  '2026-07-16', // Nossa Senhora do Carmo
+]);
+function isFeriado(dobj){
+  const dt=dobj.date;
+  const key=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  return FERIADOS_2026.has(key);
+}
+// Retorna true se o dia não deve ter checkbox (fim de semana OU feriado)
+function isNonWorkday(dobj){ return isWE(dobj)||isFeriado(dobj); }
 // Builds a slot array from explicit date ranges: [{di,df,t,p}]
-// di/df = new Date(2026, m, d)  t = 'I'|'R'|'F'|'P'  p = pavimento number|null
 function dateRangeSlots(days, ranges){
   const sl = new Array(days.length).fill(null);
   ranges.forEach(({di,df,t,p})=>{
     for(let i=0;i<days.length;i++){
-      if(isWE(days[i])) continue;
+      if(isNonWorkday(days[i])) continue;
       const dt=days[i].date;
       if(dt>=di && dt<=df) sl[i]={t, p:(p===null||p===undefined)?null:p};
     }
@@ -631,7 +712,19 @@ function loadState(){
   try{
     const sv=JSON.parse(localStorage.getItem('amira_v7')||'{}');
     if(sv.state)Object.keys(sv.state).forEach(k=>{state[k]=sv.state[k];});
-    if(sv.extra)extraSlots=sv.extra;
+    if(sv.extra){
+      extraSlots=sv.extra;
+      // Restore calendar bounds if saved
+      if(extraSlots.__calBounds){
+        Object.assign(calBounds,extraSlots.__calBounds);
+        ['U','S'].forEach(key=>{
+          const b=calBounds[key];
+          const arr=key==='U'?U:S;
+          const newDays=makeDays(b.y0,b.m0,b.d0,b.y1,b.m1,b.d1);
+          arr.splice(0,arr.length,...newDays);
+        });
+      }
+    }
   }catch(e){}
   initState();
 }
@@ -661,12 +754,62 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 
 // ─── PRINT ──────────────────────────────────────────────────────────────────
 function printCompany(which){
-  // hide the other company and trigger print
+  // Build a mini summary table for print
+  const rows=which==='urban'?URBAN_ROWS:SM;
+  const days=which==='urban'?U:S;
+  const color=which==='urban'?'#2c5f8a':'#5a3e8a';
+
+  // Create/update a print-only summary div
+  let sumDiv=document.getElementById('print-summary-'+which);
+  if(!sumDiv){
+    sumDiv=document.createElement('div');
+    sumDiv.id='print-summary-'+which;
+    sumDiv.className='print-summary';
+    document.getElementById('co-'+which).insertBefore(sumDiv,document.getElementById('co-'+which).querySelector('.crono-top'));
+  }
+  const st=groupStats(rows,days);
+  const endDate=which==='urban'?new Date(2026,5,23):new Date(2026,6,30);
+  const dLeft=Math.max(0,Math.round((endDate-TODAY)/86400000));
+  const sCls=st.late===0?'✅ Em dia':st.late<=3?'⚠ Atenção':'🔴 Atrasado';
+
+  let rowsHtml=rows.map(r=>{
+    const s=rowStats(r,days);
+    const bar=Math.round(s.pct);
+    const dStr=s.lateDays>0?`⚠ ${s.lateDays}d úteis`:'';
+    return `<tr>
+      <td style="padding:3px 6px;font-size:10px;border:1px solid #ddd;">${r.lbl}</td>
+      <td style="padding:3px 6px;font-size:10px;text-align:center;border:1px solid #ddd;">${s.done}/${s.total}</td>
+      <td style="padding:3px 6px;font-size:10px;text-align:center;border:1px solid #ddd;">${s.pct}%</td>
+      <td style="padding:3px 6px;font-size:10px;color:#b83030;border:1px solid #ddd;">${dStr}</td>
+    </tr>`;
+  }).join('');
+
+  sumDiv.innerHTML=`
+    <div style="padding:10px 16px;background:#f8f7f3;border-bottom:1px solid #d8d7cf;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
+      <div><span style="font-size:11px;color:#9a9a90;text-transform:uppercase;letter-spacing:.05em;">Avanço</span><br>
+        <span style="font-size:22px;font-weight:600;color:${color};">${st.pct}%</span>
+        <span style="font-size:11px;color:#9a9a90;"> ${st.done}/${st.total}</span></div>
+      <div><span style="font-size:11px;color:#9a9a90;text-transform:uppercase;letter-spacing:.05em;">Status</span><br>
+        <span style="font-size:14px;font-weight:500;">${sCls}</span></div>
+      <div><span style="font-size:11px;color:#9a9a90;text-transform:uppercase;letter-spacing:.05em;">Dias restantes</span><br>
+        <span style="font-size:14px;font-weight:500;">${dLeft} corridos</span></div>
+      <div style="flex:1;min-width:200px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="background:#e8e7e0;">
+            <th style="padding:3px 6px;font-size:10px;text-align:left;border:1px solid #ddd;">Serviço</th>
+            <th style="padding:3px 6px;font-size:10px;border:1px solid #ddd;">Ckpts</th>
+            <th style="padding:3px 6px;font-size:10px;border:1px solid #ddd;">%</th>
+            <th style="padding:3px 6px;font-size:10px;border:1px solid #ddd;">Atraso</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>`;
+
   const hideId=which==='urban'?'co-smd':'co-urban';
-  const el=document.getElementById(hideId);
-  el.classList.add('hidden-print');
+  document.getElementById(hideId).classList.add('hidden-print');
   window.print();
-  el.classList.remove('hidden-print');
+  document.getElementById(hideId).classList.remove('hidden-print');
 }
 
 // ─── ALERTS TOGGLE ──────────────────────────────────────────────────────────
@@ -687,14 +830,70 @@ function toggleEdit(){
   btn.className='btn '+(editMode?'edit-on':'edit-off');
   badge.className='edit-badge'+(editMode?' show':'');
   document.querySelectorAll('.tscroll').forEach(el=>el.classList.toggle('edit-mode',editMode));
+  // Show/hide calendar edit buttons
+  ['urban','smd'].forEach(w=>{
+    const b=document.getElementById('cal-btn-'+w);
+    if(b) b.style.display=editMode?'inline-flex':'none';
+  });
 }
+
+// ─── CALENDAR DATE MODAL ────────────────────────────────────────────────────
+let pendingCal=null;
+function openCalModal(which){
+  pendingCal=which;
+  const b=calBounds[which==='urban'?'U':'S'];
+  const startStr=`${b.y0}-${String(b.m0+1).padStart(2,'0')}-${String(b.d0).padStart(2,'0')}`;
+  const endStr  =`${b.y1}-${String(b.m1+1).padStart(2,'0')}-${String(b.d1).padStart(2,'0')}`;
+  document.getElementById('cal-title').textContent=(which==='urban'?'URBAN':'SMD')+' — Editar período do calendário';
+  document.getElementById('cal-company').textContent=
+    'Período atual: '+new Date(b.y0,b.m0,b.d0).toLocaleDateString('pt-BR')+' → '+new Date(b.y1,b.m1,b.d1).toLocaleDateString('pt-BR');
+  document.getElementById('cal-start').value=startStr;
+  document.getElementById('cal-end').value=endStr;
+  document.getElementById('cal-overlay').classList.add('show');
+}
+function calClose(){document.getElementById('cal-overlay').classList.remove('show');pendingCal=null;}
+function calSave(){
+  if(!pendingCal)return;
+  const startVal=document.getElementById('cal-start').value;
+  const endVal=document.getElementById('cal-end').value;
+  if(!startVal||!endVal){toast('Preencha as duas datas.');return;}
+  const [y0,m0,d0]=startVal.split('-').map(Number);
+  const [y1,m1,d1]=endVal.split('-').map(Number);
+  if(new Date(y0,m0-1,d0)>=new Date(y1,m1-1,d1)){toast('Data de início deve ser anterior ao término.');return;}
+  const key=pendingCal==='urban'?'U':'S';
+  calBounds[key]={y0,m0:m0-1,d0,y1,m1:m1-1,d1};
+  // Rebuild the days array in place
+  const newDays=makeDays(y0,m0-1,d0,y1,m1-1,d1);
+  const arr=pendingCal==='urban'?U:S;
+  arr.splice(0,arr.length,...newDays);
+  // Update period label
+  const label=document.getElementById(pendingCal+'-period');
+  if(label)label.textContent=`${String(d0).padStart(2,'0')}/${String(m0).padStart(2,'0')}/${y0} – ${String(d1).padStart(2,'0')}/${String(m1).padStart(2,'0')}/${y1}`;
+  // Rebuild slots for affected rows
+  const rows=pendingCal==='urban'?URBAN_ROWS:SM;
+  rows.forEach(r=>{ r.sl=r.sl.length!==arr.length?r.sl.slice(0,arr.length).concat(new Array(Math.max(0,arr.length-r.sl.length)).fill(null)):r.sl; });
+  // Save bounds to state
+  if(!extraSlots.__calBounds)extraSlots.__calBounds={};
+  extraSlots.__calBounds[key]=calBounds[key];
+  initState();saveState();buildAll();calClose();
+  toast('Calendário atualizado: '+newDays.length+' dias.');
+}
+document.getElementById('cal-overlay').addEventListener('click',function(e){if(e.target===this)calClose();});
 function openModal(rowId,dayIdx,days,currentSlot){
   pendingEdit={rowId,dayIdx,days};
   const day=days[dayIdx];
   const row=[...URBAN_ROWS,...SM].find(r=>r.id===rowId);
-  document.getElementById('modal-info').textContent=`${row?.lbl||rowId} · ${day.d}/${day.m+1}/2026`;
+  const dowNames=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const isHol=isFeriado(day);
+  const isWe=isWE(day);
+  document.getElementById('modal-title').textContent=(isHol?'⚠ Feriado — ':isWe?'⚠ Fim de semana — ':'')+'Editar célula';
+  document.getElementById('modal-info').textContent=
+    `${row?.lbl||rowId} · ${dowNames[day.w]} ${day.d}/${day.m+1}/2026`;
+  document.getElementById('modal-feriado-warn').style.display=(isHol||isWe)?'block':'none';
   document.getElementById('modal-type').value=currentSlot?.t||'';
-  document.getElementById('modal-pav').value=currentSlot?.p??0;
+  // pav: number → string, null → '0', string → as-is
+  const pv=currentSlot?.p;
+  document.getElementById('modal-pav').value=(pv===null||pv===undefined)?'0':String(pv);
   document.getElementById('modal-overlay').classList.add('show');
 }
 function modalClose(){document.getElementById('modal-overlay').classList.remove('show');pendingEdit=null;}
@@ -702,9 +901,15 @@ function modalSave(){
   if(!pendingEdit)return;
   const {rowId,dayIdx}=pendingEdit;
   const tp=document.getElementById('modal-type').value;
-  const pv=parseInt(document.getElementById('modal-pav').value)||0;
+  const pvRaw=document.getElementById('modal-pav').value.trim();
+  // Parse pav: '0' or '' → null, numeric string → number, text → string
+  let pv=null;
+  if(pvRaw&&pvRaw!=='0'){
+    const n=parseInt(pvRaw);
+    pv=isNaN(n)?pvRaw:n;
+  }
   if(!extraSlots[rowId])extraSlots[rowId]={};
-  extraSlots[rowId][dayIdx]=tp?{t:tp,p:pv===0?null:pv}:null;
+  extraSlots[rowId][dayIdx]=tp?{t:tp,p:pv}:null;
   initState();saveState();buildAll();modalClose();toast('Célula atualizada.');
 }
 function modalDelete(){
@@ -721,7 +926,7 @@ function rowStats(row,days){
   const sl=getSlots(row);
   let total=0,done=0,late=0,ci=0,firstLateDate=null;
   sl.forEach((s,i)=>{
-    if(!s||isWE(days[i]))return;
+    if(!s||isNonWorkday(days[i]))return;
     total++;
     if(state[row.id]&&state[row.id][ci])done++;
     else if(isPast(days[i])){
@@ -732,7 +937,7 @@ function rowStats(row,days){
     ci++;
   });
   let lateDays=0;
-  if(firstLateDate){let cur=new Date(firstLateDate);while(cur<TODAY){if(cur.getDay()!==0&&cur.getDay()!==6)lateDays++;cur.setDate(cur.getDate()+1);}}
+  if(firstLateDate){let cur=new Date(firstLateDate);while(cur<TODAY){if(cur.getDay()!==0&&cur.getDay()!==6){const k=`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;if(!FERIADOS_2026.has(k))lateDays++;}cur.setDate(cur.getDate()+1);}}
   return{total,done,late,lateDays,pct:total>0?Math.round(done/total*100):0};
 }
 function groupStats(rows,days){
@@ -836,7 +1041,10 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
     const tr=document.createElement('tr');
     days.forEach((d,i)=>{
       const th=document.createElement('th');
-      let c='cday';if(isWE(d))c+=' we';if(i===todI)c+=' tod';
+      let c='cday';
+      if(isWE(d))c+=' we';
+      else if(isFeriado(d))c+=' fer';
+      if(i===todI)c+=' tod';
       th.className=c;th.textContent=fn(d);tr.appendChild(th);
     });
     thead.appendChild(tr);
@@ -853,38 +1061,37 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
     const tr=document.createElement('tr');
     const td0=document.createElement('td');td0.className='cd';
 
-    // Description cell: shows label + contract, editable in edit mode
+    // Description: label + contract
     const lblDiv=document.createElement('div');
-    lblDiv.style.cssText='font-size:13px;line-height:1.3;';
+    lblDiv.style.cssText='font-size:13px;line-height:1.3;cursor:default;';
     lblDiv.textContent=row.lbl;
     const ctrDiv=document.createElement('div');
     ctrDiv.style.cssText='font-size:11px;color:#aaa;margin-top:1px;';
     ctrDiv.textContent='Contrato '+row.ctr;
     td0.appendChild(lblDiv);td0.appendChild(ctrDiv);
 
-    // Click on description in edit mode → inline rename
-    td0.addEventListener('click',function(e){
+    // In edit mode: click lblDiv directly opens inline input
+    lblDiv.addEventListener('click',function(e){
       if(!editMode) return;
       e.stopPropagation();
+      if(lblDiv.querySelector('input')) return; // already editing
       const cur=row.lbl;
-      const input=document.createElement('input');
-      input.type='text';input.value=cur;
-      input.style.cssText='width:100%;font-size:13px;font-family:inherit;border:1px solid #3a6fa0;border-radius:3px;padding:2px 4px;outline:none;';
-      lblDiv.replaceWith(input);
-      input.focus();input.select();
+      const inp=document.createElement('input');
+      inp.type='text';inp.value=cur;
+      inp.style.cssText='width:100%;font-size:13px;font-family:inherit;border:1px solid #3a6fa0;border-radius:3px;padding:2px 5px;outline:none;background:#fff;';
+      lblDiv.textContent='';
+      lblDiv.appendChild(inp);
+      inp.focus();inp.select();
       function commit(){
-        const val=input.value.trim()||cur;
+        const val=inp.value.trim()||cur;
         row.lbl=val;
-        const newDiv=document.createElement('div');
-        newDiv.style.cssText='font-size:13px;line-height:1.3;';
-        newDiv.textContent=val;
-        input.replaceWith(newDiv);
+        lblDiv.textContent=val;
         saveState();
       }
-      input.addEventListener('blur',commit);
-      input.addEventListener('keydown',function(ev){
-        if(ev.key==='Enter'){ev.preventDefault();commit();}
-        if(ev.key==='Escape'){input.value=cur;commit();}
+      inp.addEventListener('blur',commit);
+      inp.addEventListener('keydown',ev=>{
+        if(ev.key==='Enter'){ev.preventDefault();inp.blur();}
+        if(ev.key==='Escape'){inp.value=cur;inp.blur();}
       });
     });
 
@@ -893,19 +1100,23 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
     days.forEach((d,i)=>{
       const td=document.createElement('td');
       const slot=sl[i];
+      const isHol=isFeriado(d);
       let cls='cell';
-      if(isWE(d)){cls+=' we';}
-      else if(slot){
+      if(isWE(d)||isHol){
+        cls+=' we'; // feriados same style as weekend
+      } else if(slot){
         const done=!!(state[row.id]&&state[row.id][ci]);
         const late2=isPast(d)&&!done;
-        // late: keep original type color, add late class for red border only
         cls+=' '+slot.t;
         if(done)cls+=' done';
         if(late2)cls+=' late';
-      }else{cls+=' empty';}
+      } else {
+        cls+=' empty';
+      }
       if(i===todI)cls+=' tod';
       td.className=cls.trim();
-      if(!isWE(d)&&slot){
+
+      if(!isWE(d)&&!isHol&&slot){
         const ai=ci;const rid=row.id;
         const wrap=document.createElement('div');wrap.className='cbc';
         const cb=document.createElement('input');cb.type='checkbox';
@@ -924,11 +1135,14 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
         }
         td.appendChild(wrap);ci++;
       }
+
+      // Edit mode: click any non-weekend cell opens modal (feriados allowed with warning)
       td.addEventListener('click',function(e){
-        if(!editMode||isWE(d))return;
+        if(!editMode) return;
         e.stopPropagation();
         openModal(row.id,i,days,slot);
       });
+
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
