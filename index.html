@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cronograma Esquadrias — Amira</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:#f2f1ed;color:#1a1a18;font-family:'IBM Plex Sans',sans-serif;font-size:15px;line-height:1.5;min-height:100vh;}
+
+/* HEADER */
+.ph{background:#fff;border-bottom:1px solid #d8d7cf;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:200;box-shadow:0 1px 3px rgba(0,0,0,0.07);}
+.ph h1{font-size:18px;font-weight:600;color:#1a1a18;}
+.ph h1 em{font-style:normal;color:#6a6a60;}
+.ph-meta{font-size:12px;color:#9a9a90;font-family:'DM Mono',monospace;}
+.ph-actions{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:5px;border:1px solid #c8c7be;background:#fff;color:#5a5a52;font-size:13px;font-family:'IBM Plex Sans',sans-serif;cursor:pointer;transition:all .12s;}
+.btn:hover{background:#f0efe9;color:#1a1a18;border-color:#9a9a90;}
+.btn.exp{border-color:#3a6fa0;color:#3a6fa0;}
+.btn.exp:hover{background:#ddeaf8;}
+.btn.edit-off{border-color:#c8c7be;color:#5a5a52;}
+.btn.edit-on{border-color:#c07a10;color:#c07a10;background:#faecd0;}
+.btn.print-btn{border-color:#2c5f8a;color:#2c5f8a;}
+.btn.print-btn:hover{background:#eef3f9;}
+.btn.print-btn.smd{border-color:#5a3e8a;color:#5a3e8a;}
+.btn.print-btn.smd:hover{background:#f2eff9;}
+.btn svg{width:14px;height:14px;flex-shrink:0;}
+.sync-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:4px;font-size:11px;font-family:'DM Mono',monospace;font-weight:500;}
+.sync-ok{background:#d4f0e2;color:#1a7a52;border:1px solid #9fd8be;}
+.sync-mid{background:#faecd0;color:#c07a10;border:1px solid #f0d090;}
+.sync-off{background:#f0efe9;color:#9a9a90;border:1px solid #d8d7cf;}
+#imp{display:none;}
+.edit-badge{display:none;align-items:center;gap:6px;padding:5px 12px;border-radius:5px;background:#faecd0;border:1px solid #f0d090;font-size:12px;color:#c07a10;font-weight:500;}
+.edit-badge.show{display:inline-flex;}
+
+/* LAYOUT */
+.main{padding:20px 24px;max-width:1800px;margin:0 auto;}
+
+/* COMPANY BLOCK */
+.co{margin-bottom:28px;border:1px solid #d8d7cf;border-radius:7px;overflow:hidden;}
+.co-banner{padding:12px 18px;border-bottom:1px solid #d8d7cf;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.co-banner.urban{background:#eef3f9;border-top:3px solid #2c5f8a;}
+.co-banner.smd{background:#f2eff9;border-top:3px solid #5a3e8a;}
+.co-banner-left{}
+.co-name{font-size:16px;font-weight:600;}
+.co-banner.urban .co-name{color:#2c5f8a;}
+.co-banner.smd .co-name{color:#5a3e8a;}
+.co-scope{font-size:12px;color:#6a6a60;margin-top:2px;}
+
+/* KPI BAR */
+.kpi-bar{display:flex;gap:0;border-bottom:1px solid #d8d7cf;background:#f8f7f3;}
+.kpi{flex:1;padding:12px 16px;border-right:1px solid #d8d7cf;}
+.kpi:last-child{border-right:none;}
+.kpi-lbl{font-size:11px;color:#9a9a90;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+.kpi-val{font-size:24px;font-weight:600;line-height:1;color:#1a1a18;}
+.kpi-val.ok{color:#1a7a52;}
+.kpi-val.warn{color:#c07a10;}
+.kpi-val.bad{color:#b83030;}
+.kpi-sub{font-size:11px;color:#9a9a90;margin-top:3px;}
+.kpi-pb{height:4px;background:#e0dfd8;border-radius:2px;overflow:hidden;margin-top:8px;}
+.kpi-pbf{height:100%;border-radius:2px;transition:width .4s;}
+
+/* ALERTS — collapsible */
+.alerts-wrap{border-bottom:1px solid #d8d7cf;}
+.alerts-toggle{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;background:#f8f7f3;cursor:pointer;user-select:none;font-size:13px;font-weight:500;color:#5a5a52;}
+.alerts-toggle:hover{background:#f0efe9;}
+.alerts-toggle .badge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:11px;font-weight:600;background:#f0b8b8;color:#b83030;margin-left:6px;}
+.alerts-toggle .badge.ok{background:#9fd8be;color:#1a7a52;}
+.alerts-toggle .chevron{transition:transform .2s;font-size:11px;color:#9a9a90;}
+.alerts-toggle.open .chevron{transform:rotate(180deg);}
+.alerts-body{display:none;padding:8px 16px 12px;}
+.alerts-body.open{display:block;}
+.al{display:flex;gap:8px;align-items:flex-start;padding:7px 11px;border-radius:5px;border:1px solid;margin-bottom:6px;font-size:13px;}
+.al:last-child{margin-bottom:0;}
+.al.bad{background:#fde8e8;border-color:#f0b8b8;color:#b83030;}
+.al.warn{background:#faecd0;border-color:#f0d090;color:#c07a10;}
+.al.ok{background:#d4f0e2;border-color:#9fd8be;color:#1a7a52;}
+.al b{font-weight:500;}
+.al span{color:#5a5a52;}
+
+/* CHART — pizza centralizada */
+.ch-panel{padding:14px 18px 16px;background:#f8f7f3;border-bottom:1px solid #d8d7cf;}
+.ch-title{font-size:12px;font-weight:500;color:#6a6a60;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;}
+.ch-grid{display:flex;gap:24px;align-items:center;justify-content:center;flex-wrap:wrap;}
+.ch-wrap{width:150px;height:150px;flex-shrink:0;position:relative;}
+.ch-wrap canvas{display:block;width:150px!important;height:150px!important;}
+.ch-legend{display:flex;flex-direction:column;gap:9px;min-width:200px;}
+.ch-leg-item{display:flex;align-items:center;gap:8px;font-size:13px;color:#1a1a18;}
+.ch-leg-dot{width:13px;height:13px;border-radius:50%;flex-shrink:0;}
+.ch-leg-val{font-weight:600;margin-left:auto;font-family:'DM Mono',monospace;font-size:13px;}
+.ch-leg-pct{font-size:12px;color:#9a9a90;min-width:36px;text-align:right;font-family:'DM Mono',monospace;}
+
+/* CRONO SECTION */
+.crono-top{padding:9px 16px;border-bottom:1px solid #d8d7cf;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:#fff;}
+.crono-lbl{font-size:12px;font-weight:500;color:#6a6a60;}
+.legend{display:flex;gap:12px;flex-wrap:wrap;}
+.leg{display:flex;align-items:center;gap:5px;font-size:12px;color:#6a6a60;}
+.lbox{width:12px;height:12px;border-radius:2px;}
+
+/* TABLE */
+.tscroll{overflow-x:auto;background:#fff;}
+table{border-collapse:collapse;width:100%;min-width:700px;}
+th,td{border:1px solid #e0dfd8;padding:0;}
+.cd{min-width:210px;width:210px;padding:5px 10px;font-size:13px;color:#1a1a18;background:#fff;position:sticky;left:0;z-index:4;border-right:2px solid #c8c7be;}
+.cd.hdr{font-size:11px;font-weight:600;color:#9a9a90;background:#f0efe9;text-transform:uppercase;letter-spacing:.04em;z-index:5;}
+.cm{text-align:center;font-weight:600;font-size:11px;color:#6a6a60;background:#f0efe9;padding:3px;letter-spacing:.04em;}
+.cday{text-align:center;font-size:10px;color:#aaa;background:#f0efe9;padding:2px 0;min-width:26px;width:26px;font-family:'DM Mono',monospace;}
+.ghdr td{background:#e8e7e0;padding:5px 10px;font-size:11px;font-weight:600;color:#5a5a52;text-transform:uppercase;letter-spacing:.06em;}
+.ghdr .cd{background:#e8e7e0;}
+.cday.we{color:#c08080;background:#fce8e8;}
+.cday.tod{color:#b83030!important;background:#fde8e8!important;font-weight:700;border-left:2px solid #c0392b!important;border-right:2px solid #c0392b!important;}
+
+/* CELLS */
+.cell{text-align:center;vertical-align:middle;min-width:26px;width:26px;height:32px;position:relative;}
+/* Fábrica — amarelo */
+.cell.F{background:#fef9e0;}
+/* Instalação obra — verde claro */
+.cell.I{background:#e4f7ec;}
+/* Regulagem — verde escuro sutil */
+.cell.R{background:#c8edd8;}
+/* Replanejamento IV — azul */
+.cell.P{background:#ddeaf8;}
+/* Fim de semana / feriado — vermelho claro */
+.cell.we{background:#fce8e8!important;}
+.cday.we{color:#c08080;background:#fce8e8;}
+.cell.empty{background:#fff;}
+.cell.tod{border-left:2px solid #c0392b!important;border-right:2px solid #c0392b!important;}
+/* Marcado: cor mais intensa */
+.cell.done.F{background:#f5d840;}
+.cell.done.I{background:#6ecf96;}
+.cell.done.R{background:#2e9e62;}
+.cell.done.R .cpav{color:#fff;}
+.cell.done.R .cbc input{accent-color:#fff;}
+.cell.done.P{background:#7aabdc;}
+/* Atrasado — apenas cor original do tipo, sem destaque adicional */
+.cell.late .cpav{color:#888;}
+.cell.late .cbc input{accent-color:#aaa!important;}
+/* Modo edição hover */
+.edit-mode .cell:not(.we):hover{outline:2px solid #c07a10;outline-offset:-2px;cursor:pointer;}
+.edit-mode .cell.empty:not(.we):hover{background:#faecd0!important;cursor:pointer;}
+.edit-mode .cd:not(.hdr):hover{background:#fff8ec!important;cursor:text;outline:1px dashed #c07a10;}
+
+/* CHECKBOX — maior */
+.cbc{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;padding:1px;}
+.cbc input[type=checkbox]{width:14px;height:14px;cursor:pointer;}
+.cell.F .cbc input{accent-color:#c8a000;}
+.cell.I .cbc input{accent-color:#1a7a52;}
+.cell.R .cbc input{accent-color:#0f5c38;}
+.cell.P .cbc input{accent-color:#2c5f8a;}
+.cell.late .cbc input{accent-color:#b83030;}
+.cell.done.F .cbc input{accent-color:#a07800;}
+.cell.done.I .cbc input{accent-color:#0a6a42;}
+.cell.done.R .cbc input{accent-color:#fff;}
+.cell.done.P .cbc input{accent-color:#1a4a70;}
+.cpav{font-size:8px;font-weight:500;color:#bbb;line-height:1;font-family:'DM Mono',monospace;}
+.cell.done .cpav{color:#5a5a52;}
+.cell.done.R .cpav{color:#fff;}
+.cell.late .cpav{color:#b83030;}
+
+/* PROG ROW */
+.pr td{padding:0;}
+.prl{padding:3px 10px!important;font-size:11px;font-family:'DM Mono',monospace;background:#f0efe9!important;color:#6a6a60;}
+.prb{padding:3px 10px!important;background:#f0efe9!important;}
+.prbg{height:5px;background:#e0dfd8;border-radius:2px;overflow:hidden;}
+.prbf{height:100%;border-radius:2px;transition:width .4s;}
+
+/* SEP */
+.sep td{height:4px;background:#f0efe9;}
+
+/* EDIT MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:500;display:none;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal{background:#fff;border-radius:9px;padding:22px;min-width:280px;max-width:340px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18);}
+.modal h3{font-size:15px;font-weight:600;color:#1a1a18;margin-bottom:14px;}
+.modal-info{font-size:12px;color:#9a9a90;margin-bottom:14px;font-family:'DM Mono',monospace;}
+.modal label{font-size:12px;font-weight:600;color:#6a6a60;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px;}
+.modal select,.modal input[type=number]{width:100%;padding:7px 10px;border:1px solid #c8c7be;border-radius:5px;font-size:13px;font-family:'IBM Plex Sans',sans-serif;color:#1a1a18;background:#fff;margin-bottom:14px;}
+.modal select:focus,.modal input[type=number]:focus{outline:none;border-color:#3a6fa0;}
+.modal-btns{display:flex;gap:8px;margin-top:4px;}
+.modal-btns .btn{flex:1;justify-content:center;font-size:13px;padding:8px;}
+.btn.save{background:#1a7a52;border-color:#1a7a52;color:#fff;}
+.btn.save:hover{background:#0f6040;}
+.btn.del{background:#fde8e8;border-color:#f0b8b8;color:#b83030;}
+.btn.del:hover{background:#f0b8b8;}
+.btn.cancel{background:#f0efe9;border-color:#c8c7be;color:#5a5a52;}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;background:#1a1a18;color:#fff;border-radius:5px;padding:10px 16px;font-size:13px;z-index:999;opacity:0;transform:translateY(5px);transition:all .22s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+
+.footer{text-align:center;padding:16px;color:#aaa;font-size:12px;font-family:'DM Mono',monospace;border-top:1px solid #d8d7cf;background:#fff;margin-top:20px;}
+
+/* PRINT */
+@media print{
+  @page{size:A4 landscape;margin:8mm;}
+  body{background:#fff;font-size:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .ph,.ph-actions,.btn,.edit-badge,.toast,.footer,
+  .alerts-wrap,.ch-panel,.kpi-bar,.no-print{display:none!important;}
+  .main{padding:0;max-width:100%;}
+  .co{margin-bottom:10px;border:1px solid #ccc;border-radius:4px;overflow:visible;break-inside:avoid;}
+  .co.hidden-print{display:none!important;}
+  .co-banner{padding:6px 10px;}
+  .co-name{font-size:12px;}
+  .co-scope{font-size:8px;}
+  .crono-top{padding:4px 8px;}
+  .crono-lbl{font-size:9px;}
+  .leg{font-size:8px;}
+  .lbox{width:8px;height:8px;}
+  .tscroll{overflow:visible;width:100%;}
+  table{width:100%;min-width:unset;font-size:7px;}
+  .cd{min-width:110px;width:110px;font-size:8px;padding:2px 5px;position:static;}
+  .cd.hdr{font-size:7px;}
+  .cm{font-size:7px;padding:1px;}
+  .cday{min-width:13px;width:13px;font-size:6px;padding:1px 0;}
+  .cell{min-width:13px;width:13px;height:18px;}
+  .cbc input[type=checkbox]{width:9px;height:9px;}
+  .cpav{font-size:5px;}
+  .prl{font-size:7px;padding:1px 5px!important;}
+  .ghdr td{font-size:7px;padding:2px 5px;}
+  .sep td{height:2px;}
+  .pr td{font-size:7px;}
+}
+
+@media(max-width:700px){
+  .main{padding:12px;}
+  .kpi-bar{flex-wrap:wrap;}
+  .kpi{min-width:130px;}
+}
+</style>
+</head>
+<body>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3>Editar célula</h3>
+    <div class="modal-info" id="modal-info"></div>
+    <label>Tipo</label>
+    <select id="modal-type">
+      <option value="">— remover célula —</option>
+      <option value="F">Fábrica</option>
+      <option value="I">Instalação em obra</option>
+      <option value="R">Regulagem</option>
+      <option value="P">Replanejamento IV</option>
+    </select>
+    <label>Pavimento <span style="font-weight:400;color:#aaa;">(0 = trecho/sem número)</span></label>
+    <input type="number" id="modal-pav" min="0" max="20" value="0">
+    <div class="modal-btns">
+      <button class="btn save" onclick="modalSave()">Salvar</button>
+      <button class="btn del" onclick="modalDelete()">Remover</button>
+      <button class="btn cancel" onclick="modalClose()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="ph">
+  <div>
+    <h1>Cronograma Esquadrias — <em>Amira</em></h1>
+    <div class="ph-meta" id="ph-date"></div>
+  </div>
+  <div class="ph-actions">
+    <span class="sync-badge sync-off" id="sync-status">◌ Conectando...</span>
+    <div class="edit-badge" id="edit-badge">✏ Modo edição ativo — clique em qualquer célula</div>
+    <button class="btn edit-off" id="btn-edit" onclick="toggleEdit()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Modo Edição
+    </button>
+    <button class="btn print-btn" onclick="printCompany('urban')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Imprimir URBAN
+    </button>
+    <button class="btn print-btn smd" onclick="printCompany('smd')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Imprimir SMD
+    </button>
+    <button class="btn exp" onclick="exportData()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Exportar
+    </button>
+    <button class="btn" onclick="document.getElementById('imp').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><line x1="12" y1="3" x2="12" y2="15"/><polyline points="17 8 12 3 7 8"/></svg>
+      Importar
+    </button>
+    <input type="file" id="imp" accept=".json" onchange="importData(event)">
+  </div>
+</div>
+
+<div class="main">
+  <!-- URBAN -->
+  <div class="co" id="co-urban">
+    <div class="co-banner urban">
+      <div class="co-banner-left">
+        <div class="co-name">URBAN</div>
+        <div class="co-scope">Pele de vidro térreo · Esquadrias integradas · Janelas · Varandas · Regulagem · Lavanderia &nbsp;|&nbsp; Contrato 04 &nbsp;|&nbsp; 24/04/2026 – 23/06/2026</div>
+      </div>
+    </div>
+    <div class="kpi-bar" id="kpi-urban"></div>
+    <div class="alerts-wrap">
+      <div class="alerts-toggle" id="alt-urban" onclick="toggleAlerts('urban')">
+        <span>Alertas de execução <span class="badge" id="alt-badge-urban">0</span></span>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="alerts-body" id="al-urban"></div>
+    </div>
+    <div class="ch-panel">
+      <div class="ch-title">Situação — URBAN</div>
+      <div class="ch-grid">
+        <div class="ch-wrap"><canvas id="ch-urban"></canvas></div>
+        <div class="ch-legend" id="ch-leg-urban"></div>
+      </div>
+    </div>
+    <div class="crono-top">
+      <span class="crono-lbl">Cronograma detalhado</span>
+      <div class="legend">
+        <div class="leg"><div class="lbox" style="background:#fef9e0;border:1px solid #e8d060;"></div>Fábrica / Produção</div>
+        <div class="leg"><div class="lbox" style="background:#e4f7ec;border:1px solid #6ecf96;"></div>Instalação obra</div>
+        <div class="leg"><div class="lbox" style="background:#c8edd8;border:1px solid #2e9e62;"></div>Regulagem</div>
+        <div class="leg"><div class="lbox" style="background:#ddeaf8;border:1px solid #7aabdc;"></div>Replanejamento</div>
+        <div class="leg"><div class="lbox" style="background:#f5d840;border:1px solid #c8a000;"></div>Fábrica ✓</div>
+        <div class="leg"><div class="lbox" style="background:#6ecf96;border:1px solid #1a7a52;"></div>Instalação ✓</div>
+        <div class="leg"><div class="lbox" style="background:#2e9e62;border:1px solid #0f5c38;"></div>Regulagem ✓</div>
+        <div class="leg"><div class="lbox" style="background:#7aabdc;border:1px solid #2c5f8a;"></div>Replanejamento ✓</div>
+        <div class="leg"><div class="lbox" style="background:#fce8e8;border:1px solid #e0a0a0;"></div>Sáb / Dom / Feriado</div>
+      </div>
+    </div>
+    <div class="tscroll" id="ts-urban"><table><thead id="th-urban"></thead><tbody id="tb-urban"></tbody></table></div>
+  </div>
+
+  <!-- SMD -->
+  <div class="co" id="co-smd">
+    <div class="co-banner smd">
+      <div class="co-banner-left">
+        <div class="co-name">SMD</div>
+        <div class="co-scope">Oscilo batente · Guarda corpo · Muro de vidro · Pele guarita · Brises · Venezianas / Subsolos &nbsp;|&nbsp; 18/05/2026 – 30/07/2026</div>
+      </div>
+    </div>
+    <div class="kpi-bar" id="kpi-smd"></div>
+    <div class="alerts-wrap">
+      <div class="alerts-toggle" id="alt-smd" onclick="toggleAlerts('smd')">
+        <span>Alertas de execução <span class="badge" id="alt-badge-smd">0</span></span>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="alerts-body" id="al-smd"></div>
+    </div>
+    <div class="ch-panel">
+      <div class="ch-title">Situação — SMD</div>
+      <div class="ch-grid">
+        <div class="ch-wrap"><canvas id="ch-smd"></canvas></div>
+        <div class="ch-legend" id="ch-leg-smd"></div>
+      </div>
+    </div>
+    <div class="crono-top">
+      <span class="crono-lbl">Cronograma detalhado</span>
+      <div class="legend">
+        <div class="leg"><div class="lbox" style="background:#e4f7ec;border:1px solid #6ecf96;"></div>Instalação obra</div>
+        <div class="leg"><div class="lbox" style="background:#ddeaf8;border:1px solid #7aabdc;"></div>Replanejamento IV</div>
+        <div class="leg"><div class="lbox" style="background:#6ecf96;border:1px solid #1a7a52;"></div>Instalação ✓</div>
+        <div class="leg"><div class="lbox" style="background:#fce8e8;border:1px solid #e0a0a0;"></div>Sáb / Dom / Feriado</div>
+      </div>
+    </div>
+    <div class="tscroll" id="ts-smd"><table><thead id="th-smd"></thead><tbody id="tb-smd"></tbody></table></div>
+  </div>
+</div>
+
+<div class="footer">Elaborado por Mário de Lara &nbsp;·&nbsp; Empreendimento Amira &nbsp;·&nbsp; <span id="ft-date"></span></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// ─── HELPERS ────────────────────────────────────────────────────────────────
+function makeDays(y,m0,d0,y2,m2,d2){
+  const out=[];
+  let cur=new Date(y,m0,d0),fin=new Date(y2,m2,d2);
+  while(cur<=fin){out.push({date:new Date(cur),m:cur.getMonth(),d:cur.getDate(),w:cur.getDay()});cur.setDate(cur.getDate()+1);}
+  return out;
+}
+const isWE=x=>x.w===0||x.w===6;
+const DOW=['dom','seg','ter','qua','qui','sex','sáb'];
+const MON=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago'];
+const TODAY=new Date();TODAY.setHours(0,0,0,0);
+function isPast(dobj){const t=new Date(dobj.date);t.setHours(0,0,0,0);return t<TODAY;}
+function todayIdx(days){return days.findIndex(x=>{const t=new Date(x.date);t.setHours(0,0,0,0);return t.getTime()===TODAY.getTime();});}
+
+const U=makeDays(2026,3,24,2026,5,23);
+const S=makeDays(2026,4,18,2026,6,30);
+const U_TOD=todayIdx(U);
+const S_TOD=todayIdx(S);
+
+// ─── SLOT BUILDERS ──────────────────────────────────────────────────────────
+function pavSlots(days,iArr,rArr,iStart,rStart){
+  const sl=new Array(days.length).fill(null);
+  let pi=0,wd=0;
+  for(let i=0;i<days.length;i++){if(!isWE(days[i])){if(wd>=iStart&&pi<iArr.length)sl[i]={t:'I',p:iArr[pi++]};wd++;}}
+  pi=0;wd=0;
+  for(let i=0;i<days.length;i++){if(!isWE(days[i])){if(wd>=rStart&&pi<rArr.length&&!sl[i])sl[i]={t:'R',p:rArr[pi++]};wd++;}}
+  return sl;
+}
+function peleSlots(days,faixas){
+  const sl=new Array(days.length).fill(null);
+  faixas.forEach(([skip,cnt,tp])=>{
+    let s=skip,c=cnt;
+    for(let i=0;i<days.length;i++){if(isWE(days[i]))continue;if(s>0){s--;continue;}if(c<=0)break;sl[i]={t:tp,p:1};c--;}
+  });
+  return sl;
+}
+function trechoSlots(days,wdStart,wdEnd){
+  const sl=new Array(days.length).fill(null);
+  let wd=0;
+  for(let i=0;i<days.length;i++){if(!isWE(days[i])){if(wd>=wdStart&&wd<wdEnd)sl[i]={t:'I',p:null};wd++;}}
+  return sl;
+}
+
+// ─── DATE-RANGE SLOT BUILDER ─────────────────────────────────────────────────
+// Builds a slot array from explicit date ranges: [{di,df,t,p}]
+// di/df = new Date(2026, m, d)  t = 'I'|'R'|'F'|'P'  p = pavimento number|null
+function dateRangeSlots(days, ranges){
+  const sl = new Array(days.length).fill(null);
+  ranges.forEach(({di,df,t,p})=>{
+    for(let i=0;i<days.length;i++){
+      if(isWE(days[i])) continue;
+      const dt=days[i].date;
+      if(dt>=di && dt<=df) sl[i]={t, p:(p===null||p===undefined)?null:p};
+    }
+  });
+  return sl;
+}
+function d(m,day){return new Date(2026,m-1,day);}  // helper: month 1-based
+
+// ─── ROW DEFINITIONS ────────────────────────────────────────────────────────
+const UP=[
+  {id:'u-pi',lbl:'Pele vidro térreo — INTERNA',           ctr:'04', sl:dateRangeSlots(U,[
+    {di:d(4,27), df:d(5,22), t:'I', p:1},
+    {di:d(6,1),  df:d(6,12), t:'P', p:1},
+  ])},
+  {id:'u-pp',lbl:'Pele vidro térreo — EXTERNA (piscina)', ctr:'04', sl:dateRangeSlots(U,[
+    {di:d(4,27), df:d(5,15), t:'I', p:1},
+    {di:d(5,18), df:d(5,30), t:'P', p:1},
+  ])},
+  {id:'u-pf',lbl:'Pele vidro térreo — EXTERNA (frente)',  ctr:'04', sl:dateRangeSlots(U,[
+    {di:d(4,27), df:d(5,22), t:'I', p:1},
+    {di:d(6,1),  df:d(6,12), t:'P', p:1},
+  ])},
+  {id:'u-pq',lbl:'Pele vidro térreo — EXTERNA (quadra)',  ctr:'04', sl:dateRangeSlots(U,[
+    {di:d(4,27), df:d(5,15), t:'I', p:1},
+    {di:d(5,25), df:d(5,30), t:'P', p:1},
+  ])},
+];
+const UE=[
+  {id:'u-ei',lbl:'Esquadrias integradas',                  ctr:'04', sl:dateRangeSlots(U,[
+    {di:d(4,24), df:d(4,25), t:'I', p:2},
+    {di:d(4,27), df:d(4,29), t:'I', p:3},
+    {di:d(4,30), df:d(5,4),  t:'I', p:4},
+    {di:d(5,5),  df:d(5,7),  t:'I', p:5},
+    {di:d(5,8),  df:d(5,11), t:'I', p:6},
+    {di:d(5,12), df:d(5,15), t:'I', p:7},
+    {di:d(5,25), df:d(5,29), t:'P', p:9},
+  ])},
+  {id:'u-ef',lbl:'Esquadrias integradas — folhas',         ctr:'04', sl:dateRangeSlots(U,[
+    {di:d(4,27), df:d(4,29), t:'F', p:4},
+    {di:d(4,30), df:d(5,5),  t:'F', p:5},
+    {di:d(5,6),  df:d(5,8),  t:'F', p:6},
+    {di:d(5,9),  df:d(5,12), t:'F', p:7},
+    {di:d(5,13), df:d(5,19), t:'F', p:9},
+  ])},
+  {id:'u-js',lbl:'Esquadrias janela sala — 5 un/dia',      ctr:'04', sl:dateRangeSlots(U,[
+    {di:d(5,11), df:d(5,12), t:'I', p:2},
+    {di:d(5,13), df:d(5,15), t:'I', p:3},
+    {di:d(5,18), df:d(5,21), t:'P', p:2},
+    {di:d(5,22), df:d(5,25), t:'P', p:3},
+    {di:d(5,26), df:d(5,28), t:'P', p:4},
+    {di:d(5,29), df:d(6,2),  t:'P', p:5},
+    {di:d(6,3),  df:d(6,6),  t:'P', p:6},
+    {di:d(6,8),  df:d(6,10), t:'P', p:7},
+    {di:d(6,11), df:d(6,13), t:'P', p:8},
+  ])},
+  {id:'u-pj',lbl:"Esquadrias PJ's varandas",               ctr:'04', sl:dateRangeSlots(U,[
+    {di:d(5,11), df:d(5,12), t:'I', p:2},
+    {di:d(5,13), df:d(5,15), t:'I', p:3},
+    {di:d(5,18), df:d(5,21), t:'P', p:2},
+    {di:d(5,23), df:d(5,26), t:'P', p:3},
+    {di:d(5,27), df:d(5,29), t:'P', p:4},
+    {di:d(5,29), df:d(6,2),  t:'P', p:5},
+    {di:d(6,3),  df:d(6,6),  t:'P', p:6},
+    {di:d(6,8),  df:d(6,10), t:'P', p:7},
+    {di:d(6,11), df:d(6,13), t:'P', p:8},
+  ])},
+  {id:'u-rg',lbl:'Regulagem integradas + regulagem geral', ctr:'04', sl:dateRangeSlots(U,[
+    {di:d(5,20), df:d(5,22), t:'P', p:2},
+    {di:d(5,23), df:d(5,26), t:'P', p:3},
+    {di:d(5,27), df:d(5,29), t:'P', p:4},
+    {di:d(5,30), df:d(6,2),  t:'P', p:5},
+    {di:d(6,3),  df:d(6,6),  t:'P', p:6},
+    {di:d(6,8),  df:d(6,10), t:'P', p:7},
+    {di:d(6,11), df:d(6,13), t:'P', p:9},
+  ])},
+  {id:'u-lv',lbl:'Porta de Giro lavanderia',               ctr:'04', sl:dateRangeSlots(U,[
+    {di:d(6,1),  df:d(6,2),  t:'P', p:2},
+    {di:d(6,3),  df:d(6,5),  t:'P', p:3},
+    {di:d(6,6),  df:d(6,8),  t:'P', p:4},
+    {di:d(6,9),  df:d(6,10), t:'P', p:5},
+    {di:d(6,11), df:d(6,12), t:'P', p:6},
+    {di:d(6,13), df:d(6,15), t:'P', p:7},
+    {di:d(6,16), df:d(6,17), t:'P', p:8},
+  ])},
+];
+const URBAN_ROWS=[...UP,...UE];
+
+const SM=[
+  // Oscilo batente — instalação por pavimento, datas do print
+  {id:'s-ob', lbl:'Oscilo batente',                  ctr:'SMD', sl:dateRangeSlots(S,[
+    {di:d(5,25), df:d(5,26), t:'I', p:2},
+    {di:d(5,27), df:d(5,28), t:'I', p:3},
+    {di:d(5,29), df:d(6,1),  t:'I', p:4},
+    {di:d(6,2),  df:d(6,3),  t:'I', p:5},
+    {di:d(6,5),  df:d(6,6),  t:'I', p:6},
+    {di:d(6,8),  df:d(6,9),  t:'I', p:7},
+    {di:d(6,10), df:d(6,11), t:'I', p:9},
+  ])},
+  // Guarda corpo vidro cobertura — Fachada, sem número de pavimento
+  {id:'s-gc', lbl:'Guarda corpo vidro cobertura',    ctr:'SMD', sl:dateRangeSlots(S,[
+    {di:d(6,1),  df:d(6,12), t:'I', p:null},
+  ])},
+  // Muro de Vidro térreo — removido do cronograma SMD (sem dados no print)
+  {id:'s-mv', lbl:'Muro de Vidro térreo',            ctr:'SMD', sl:new Array(S.length).fill(null)},
+  // Pele vidro guarita — Fachada
+  {id:'s-gr', lbl:'Pele vidro guarita',              ctr:'SMD', sl:dateRangeSlots(S,[
+    {di:d(7,13), df:d(7,30), t:'I', p:null},
+  ])},
+  // Brises — duas partes sem pavimento numerado
+  {id:'s-br', lbl:'Brises (instalação)',             ctr:'SMD', sl:dateRangeSlots(S,[
+    {di:d(6,1),  df:d(6,19), t:'I', p:null},
+    {di:d(7,13), df:d(7,20), t:'I', p:null},
+  ])},
+  // Venezianas / Porta giro subsolos — SS
+  {id:'s-ss', lbl:'Venezianas / Porta giro subsolos',ctr:'SMD', sl:dateRangeSlots(S,[
+    {di:d(6,15), df:d(7,3),  t:'I', p:'SS'},
+  ])},
+];
+
+// ─── FIREBASE CONFIG ──────────────────────────────────────────────────────────
+let extraSlots={};
+// Substitua pelos dados do seu projeto Firebase
+const FB_CONFIG = {
+  apiKey:            "COLE_AQUI_API_KEY",
+  authDomain:        "COLE_AQUI.firebaseapp.com",
+  databaseURL:       "https://COLE_AQUI-default-rtdb.firebaseio.com",
+  projectId:         "COLE_AQUI",
+};
+const FB_PATH = 'amira/cronograma'; // caminho no banco
+let db = null;
+let fbRef = null;
+let fbListening = false;
+let skipNextFbWrite = false; // evita loop de escrita após receber update
+
+function initFirebase(){
+  try{
+    if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    db = firebase.database();
+    fbRef = db.ref(FB_PATH);
+    // Ouve mudanças em tempo real
+    fbRef.on('value', snap => {
+      if(skipNextFbWrite){ skipNextFbWrite=false; return; }
+      const data = snap.val();
+      if(data && data.state){
+        Object.keys(data.state).forEach(k=>{ state[k]=data.state[k]; });
+        if(data.extra) extraSlots = data.extra;
+        initState();
+        buildAll();
+        setSyncStatus('synced');
+      }
+    }, err => {
+      console.warn('Firebase read error:', err);
+      setSyncStatus('offline');
+    });
+    setSyncStatus('synced');
+  } catch(e){
+    console.warn('Firebase init failed:', e);
+    setSyncStatus('offline');
+  }
+}
+
+function fbSave(){
+  if(!fbRef){ saveLocal(); return; }
+  setSyncStatus('saving');
+  skipNextFbWrite = true;
+  fbRef.set({ state, extra: extraSlots, at: new Date().toISOString() })
+    .then(()=>{ saveLocal(); setSyncStatus('synced'); })
+    .catch(e=>{ console.warn('Firebase write error:', e); saveLocal(); setSyncStatus('offline'); });
+}
+
+function setSyncStatus(s){
+  const el = document.getElementById('sync-status');
+  if(!el) return;
+  const map = {
+    synced:  { txt:'● Sincronizado',   cls:'sync-ok'  },
+    saving:  { txt:'↻ Salvando...',    cls:'sync-mid' },
+    offline: { txt:'◌ Offline (local)',cls:'sync-off' },
+  };
+  const m = map[s] || map.offline;
+  el.textContent = m.txt;
+  el.className = 'sync-badge ' + m.cls;
+}
+
+// ─── STATE ──────────────────────────────────────────────────────────────────
+const state={};
+function getSlots(row){
+  const base=row.sl.slice();
+  const ex=extraSlots[row.id]||{};
+  Object.keys(ex).forEach(i=>{const idx=parseInt(i);if(idx>=0&&idx<base.length)base[idx]=ex[idx];});
+  return base;
+}
+function initState(){
+  [...URBAN_ROWS,...SM].forEach(r=>{
+    const cnt=getSlots(r).filter(Boolean).length;
+    if(!state[r.id])state[r.id]=new Array(cnt).fill(false);
+    else if(state[r.id].length!==cnt){
+      const old=state[r.id].slice();
+      state[r.id]=new Array(cnt).fill(false);
+      for(let i=0;i<Math.min(old.length,cnt);i++)state[r.id][i]=old[i];
+    }
+  });
+}
+function saveLocal(){
+  try{localStorage.setItem('amira_v7',JSON.stringify({state,extra:extraSlots}));}catch(e){}
+}
+function loadState(){
+  try{
+    const sv=JSON.parse(localStorage.getItem('amira_v7')||'{}');
+    if(sv.state)Object.keys(sv.state).forEach(k=>{state[k]=sv.state[k];});
+    if(sv.extra)extraSlots=sv.extra;
+  }catch(e){}
+  initState();
+}
+function saveState(){
+  fbSave();
+}
+function exportData(){
+  const blob=new Blob([JSON.stringify({v:7,state,extra:extraSlots,at:new Date().toISOString()},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='amira_'+new Date().toISOString().slice(0,10)+'.json';a.click();
+  toast('Exportado!');
+}
+function importData(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      if(d.state)Object.keys(d.state).forEach(k=>{state[k]=d.state[k];});
+      if(d.extra)extraSlots=d.extra;
+      saveState();initState();buildAll();toast('Importado!');
+    }catch(e){toast('Erro ao importar.');}
+  };
+  r.readAsText(f);e.target.value='';
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400);}
+
+// ─── PRINT ──────────────────────────────────────────────────────────────────
+function printCompany(which){
+  // hide the other company and trigger print
+  const hideId=which==='urban'?'co-smd':'co-urban';
+  const el=document.getElementById(hideId);
+  el.classList.add('hidden-print');
+  window.print();
+  el.classList.remove('hidden-print');
+}
+
+// ─── ALERTS TOGGLE ──────────────────────────────────────────────────────────
+const alertsOpen={urban:false,smd:false};
+function toggleAlerts(which){
+  alertsOpen[which]=!alertsOpen[which];
+  document.getElementById('al-'+which).classList.toggle('open',alertsOpen[which]);
+  document.getElementById('alt-'+which).classList.toggle('open',alertsOpen[which]);
+}
+
+// ─── EDIT MODE ──────────────────────────────────────────────────────────────
+let editMode=false;
+let pendingEdit=null;
+function toggleEdit(){
+  editMode=!editMode;
+  const btn=document.getElementById('btn-edit');
+  const badge=document.getElementById('edit-badge');
+  btn.className='btn '+(editMode?'edit-on':'edit-off');
+  badge.className='edit-badge'+(editMode?' show':'');
+  document.querySelectorAll('.tscroll').forEach(el=>el.classList.toggle('edit-mode',editMode));
+}
+function openModal(rowId,dayIdx,days,currentSlot){
+  pendingEdit={rowId,dayIdx,days};
+  const day=days[dayIdx];
+  const row=[...URBAN_ROWS,...SM].find(r=>r.id===rowId);
+  document.getElementById('modal-info').textContent=`${row?.lbl||rowId} · ${day.d}/${day.m+1}/2026`;
+  document.getElementById('modal-type').value=currentSlot?.t||'';
+  document.getElementById('modal-pav').value=currentSlot?.p??0;
+  document.getElementById('modal-overlay').classList.add('show');
+}
+function modalClose(){document.getElementById('modal-overlay').classList.remove('show');pendingEdit=null;}
+function modalSave(){
+  if(!pendingEdit)return;
+  const {rowId,dayIdx}=pendingEdit;
+  const tp=document.getElementById('modal-type').value;
+  const pv=parseInt(document.getElementById('modal-pav').value)||0;
+  if(!extraSlots[rowId])extraSlots[rowId]={};
+  extraSlots[rowId][dayIdx]=tp?{t:tp,p:pv===0?null:pv}:null;
+  initState();saveState();buildAll();modalClose();toast('Célula atualizada.');
+}
+function modalDelete(){
+  if(!pendingEdit)return;
+  const {rowId,dayIdx}=pendingEdit;
+  if(!extraSlots[rowId])extraSlots[rowId]={};
+  extraSlots[rowId][dayIdx]=null;
+  initState();saveState();buildAll();modalClose();toast('Célula removida.');
+}
+document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)modalClose();});
+
+// ─── STATS ──────────────────────────────────────────────────────────────────
+function rowStats(row,days){
+  const sl=getSlots(row);
+  let total=0,done=0,late=0,ci=0,firstLateDate=null;
+  sl.forEach((s,i)=>{
+    if(!s||isWE(days[i]))return;
+    total++;
+    if(state[row.id]&&state[row.id][ci])done++;
+    else if(isPast(days[i])){
+      late++;
+      const dt=new Date(days[i].date);dt.setHours(0,0,0,0);
+      if(!firstLateDate||dt<firstLateDate)firstLateDate=dt;
+    }
+    ci++;
+  });
+  let lateDays=0;
+  if(firstLateDate){let cur=new Date(firstLateDate);while(cur<TODAY){if(cur.getDay()!==0&&cur.getDay()!==6)lateDays++;cur.setDate(cur.getDate()+1);}}
+  return{total,done,late,lateDays,pct:total>0?Math.round(done/total*100):0};
+}
+function groupStats(rows,days){
+  let total=0,done=0,late=0;
+  rows.forEach(r=>{const s=rowStats(r,days);total+=s.total;done+=s.done;late+=s.late;});
+  return{total,done,late,pct:total>0?Math.round(done/total*100):0};
+}
+
+// ─── KPI ────────────────────────────────────────────────────────────────────
+function buildKPI(rows,days,elId,color,endDate){
+  const st=groupStats(rows,days);
+  const wdLeft=days.filter(d=>{const t=new Date(d.date);t.setHours(0,0,0,0);return t>=TODAY&&!isWE(d);}).length;
+  const dLeft=Math.max(0,Math.round((endDate-TODAY)/86400000));
+  const sCls=st.late===0?'ok':st.late<=3?'warn':'bad';
+  const sLbl=st.late===0?'Em dia':st.late<=3?'Atenção':'Atrasado';
+  document.getElementById(elId).innerHTML=`
+    <div class="kpi"><div class="kpi-lbl">Avanço geral</div><div class="kpi-val ${sCls}">${st.pct}%</div><div class="kpi-sub">${st.done} / ${st.total} checkpoints</div><div class="kpi-pb"><div class="kpi-pbf" style="width:${st.pct}%;background:${color};"></div></div></div>
+    <div class="kpi"><div class="kpi-lbl">Status</div><div class="kpi-val ${sCls}">${sLbl}</div><div class="kpi-sub">${st.late} item${st.late!==1?'s':''} em atraso</div></div>
+    <div class="kpi"><div class="kpi-lbl">Itens atrasados</div><div class="kpi-val ${st.late>0?'bad':'ok'}">${st.late}</div><div class="kpi-sub">checkpoints vencidos</div></div>
+    <div class="kpi"><div class="kpi-lbl">Dias úteis restantes</div><div class="kpi-val">${wdLeft}</div><div class="kpi-sub">${dLeft} dias corridos</div></div>`;
+}
+
+// ─── ALERTS ─────────────────────────────────────────────────────────────────
+function buildAlerts(rows,days,elId,badgeId){
+  const el=document.getElementById(elId);
+  const badge=document.getElementById(badgeId);
+  const items=[];
+  rows.forEach(r=>{
+    const s=rowStats(r,days);
+    if(s.late>0){
+      const cls=s.late>=5?'bad':'warn';
+      const dStr=s.lateDays>0?`${s.lateDays} dia${s.lateDays>1?'s':''} úteis em atraso`:'em atraso';
+      items.push(`<div class="al ${cls}"><b>${r.lbl}</b>&ensp;<span>${dStr} · ${s.done}/${s.total} (${s.pct}%)</span></div>`);
+    }
+  });
+  el.innerHTML=items.length?items.join(''):'<div class="al ok"><b>Nenhum atraso identificado até o momento.</b></div>';
+  if(badge){
+    badge.textContent=items.length||'✓';
+    badge.className='badge'+(items.length===0?' ok':'');
+  }
+}
+
+// ─── CHART ──────────────────────────────────────────────────────────────────
+const _charts={};
+function buildChart(rows,days,cid,color,legId){
+  const st=groupStats(rows,days);
+  const done=st.done,late=st.late,pending=Math.max(0,st.total-st.done-st.late);
+  if(_charts[cid])_charts[cid].destroy();
+  const ctx=document.getElementById(cid);
+  if(!ctx)return;
+  _charts[cid]=new Chart(ctx,{
+    type:'doughnut',
+    data:{
+      labels:['Concluído','Atrasado','Pendente'],
+      datasets:[{data:[done,late,pending],backgroundColor:['#2e9e62','#b83030',color+'88'],borderWidth:2,borderColor:'#f8f7f3',hoverOffset:5}]
+    },
+    options:{
+      responsive:false,cutout:'66%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#fff',borderColor:'#d8d7cf',borderWidth:1,titleColor:'#1a1a18',bodyColor:'#6a6a60',padding:10,
+          callbacks:{label:c=>`${c.label}: ${c.raw} (${st.total>0?Math.round(c.raw/st.total*100):0}%)`}}
+      }
+    }
+  });
+  const leg=document.getElementById(legId);
+  if(!leg)return;
+  const pctDone=st.total>0?Math.round(done/st.total*100):0;
+  const pctLate=st.total>0?Math.round(late/st.total*100):0;
+  const pctPend=st.total>0?Math.round(pending/st.total*100):0;
+  leg.innerHTML=[
+    {lbl:'Concluído',val:done, pct:pctDone,color:'#2e9e62'},
+    {lbl:'Atrasado', val:late, pct:pctLate,color:'#b83030'},
+    {lbl:'Pendente', val:pending,pct:pctPend,color:color+'aa'},
+  ].map(it=>`
+    <div class="ch-leg-item">
+      <div class="ch-leg-dot" style="background:${it.color};"></div>
+      <span>${it.lbl}</span>
+      <span class="ch-leg-val">${it.val}</span>
+      <span class="ch-leg-pct">${it.pct}%</span>
+    </div>`).join('')+`
+    <div style="margin-top:6px;padding-top:8px;border-top:1px solid #e0dfd8;font-size:11px;color:#9a9a90;font-family:'DM Mono',monospace;">
+      Total: ${st.total} checkpoints
+    </div>`;
+}
+
+// ─── TABLE ──────────────────────────────────────────────────────────────────
+function monthGroups(days){
+  const g=[];let cur=null;
+  days.forEach(d=>{const mn=MON[d.m];if(!cur||cur.n!==mn){cur={n:mn,c:0};g.push(cur);}cur.c++;});
+  return g;
+}
+function buildTable(rows,days,thId,tbId,todI,isUrban){
+  const thead=document.getElementById(thId),tbody=document.getElementById(tbId);
+  thead.innerHTML='';tbody.innerHTML='';
+  const tr1=document.createElement('tr');
+  const thD=document.createElement('th');thD.className='cd hdr';thD.rowSpan=3;thD.textContent='Descrição';tr1.appendChild(thD);
+  monthGroups(days).forEach(g=>{const th=document.createElement('th');th.className='cm';th.colSpan=g.c;th.textContent=g.n;tr1.appendChild(th);});
+  thead.appendChild(tr1);
+  [[d=>d.d],[d=>DOW[d.w].slice(0,3)]].forEach(([fn])=>{
+    const tr=document.createElement('tr');
+    days.forEach((d,i)=>{
+      const th=document.createElement('th');
+      let c='cday';if(isWE(d))c+=' we';if(i===todI)c+=' tod';
+      th.className=c;th.textContent=fn(d);tr.appendChild(th);
+    });
+    thead.appendChild(tr);
+  });
+
+  function ghdr(lbl){
+    const tr=document.createElement('tr');tr.className='ghdr';
+    const tdLabel=document.createElement('td');tdLabel.className='cd';tdLabel.textContent=lbl;
+    const tdRest=document.createElement('td');tdRest.colSpan=days.length;
+    tr.appendChild(tdLabel);tr.appendChild(tdRest);tbody.appendChild(tr);
+  }
+  function addRow(row){
+    const sl=getSlots(row);
+    const tr=document.createElement('tr');
+    const td0=document.createElement('td');td0.className='cd';
+
+    // Description cell: shows label + contract, editable in edit mode
+    const lblDiv=document.createElement('div');
+    lblDiv.style.cssText='font-size:13px;line-height:1.3;';
+    lblDiv.textContent=row.lbl;
+    const ctrDiv=document.createElement('div');
+    ctrDiv.style.cssText='font-size:11px;color:#aaa;margin-top:1px;';
+    ctrDiv.textContent='Contrato '+row.ctr;
+    td0.appendChild(lblDiv);td0.appendChild(ctrDiv);
+
+    // Click on description in edit mode → inline rename
+    td0.addEventListener('click',function(e){
+      if(!editMode) return;
+      e.stopPropagation();
+      const cur=row.lbl;
+      const input=document.createElement('input');
+      input.type='text';input.value=cur;
+      input.style.cssText='width:100%;font-size:13px;font-family:inherit;border:1px solid #3a6fa0;border-radius:3px;padding:2px 4px;outline:none;';
+      lblDiv.replaceWith(input);
+      input.focus();input.select();
+      function commit(){
+        const val=input.value.trim()||cur;
+        row.lbl=val;
+        const newDiv=document.createElement('div');
+        newDiv.style.cssText='font-size:13px;line-height:1.3;';
+        newDiv.textContent=val;
+        input.replaceWith(newDiv);
+        saveState();
+      }
+      input.addEventListener('blur',commit);
+      input.addEventListener('keydown',function(ev){
+        if(ev.key==='Enter'){ev.preventDefault();commit();}
+        if(ev.key==='Escape'){input.value=cur;commit();}
+      });
+    });
+
+    tr.appendChild(td0);
+    let ci=0;
+    days.forEach((d,i)=>{
+      const td=document.createElement('td');
+      const slot=sl[i];
+      let cls='cell';
+      if(isWE(d)){cls+=' we';}
+      else if(slot){
+        const done=!!(state[row.id]&&state[row.id][ci]);
+        const late2=isPast(d)&&!done;
+        // late: keep original type color, add late class for red border only
+        cls+=' '+slot.t;
+        if(done)cls+=' done';
+        if(late2)cls+=' late';
+      }else{cls+=' empty';}
+      if(i===todI)cls+=' tod';
+      td.className=cls.trim();
+      if(!isWE(d)&&slot){
+        const ai=ci;const rid=row.id;
+        const wrap=document.createElement('div');wrap.className='cbc';
+        const cb=document.createElement('input');cb.type='checkbox';
+        cb.checked=!!(state[rid]&&state[rid][ai]);
+        cb.addEventListener('change',function(e){
+          if(editMode){e.preventDefault();e.stopPropagation();return;}
+          if(!state[rid])state[rid]=[];
+          state[rid][ai]=this.checked;
+          saveState();buildAll();
+        });
+        wrap.appendChild(cb);
+        if(slot.p!==null&&slot.p!==undefined){
+          const pn=document.createElement('div');pn.className='cpav';
+          pn.textContent=typeof slot.p==='string'?slot.p:slot.p+'º';
+          wrap.appendChild(pn);
+        }
+        td.appendChild(wrap);ci++;
+      }
+      td.addEventListener('click',function(e){
+        if(!editMode||isWE(d))return;
+        e.stopPropagation();
+        openModal(row.id,i,days,slot);
+      });
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+    const s=rowStats(row,days);
+    const pTr=document.createElement('tr');pTr.className='pr';
+    const pL=document.createElement('td');pL.className='cd prl';
+    pL.style.color=s.late>0?'#b83030':s.pct===100?'#1a7a52':'#6a6a60';
+    const dStr=s.lateDays>0?` · ⚠ ${s.lateDays} dia${s.lateDays>1?'s':''} úteis em atraso`:'';
+    pL.textContent=`${s.done}/${s.total} · ${s.pct}%${dStr}`;
+    pTr.appendChild(pL);
+    const pTd=document.createElement('td');pTd.className='prb';pTd.colSpan=days.length;
+    const pbg=document.createElement('div');pbg.className='prbg';
+    const pf=document.createElement('div');pf.className='prbf';
+    pf.style.width=s.pct+'%';
+    const hasR=sl.some(x=>x&&x.t==='R');
+    pf.style.background=s.late>0?'#b83030':s.pct===100?'#1a7a52':hasR?'#2e9e62':'#3a6fa0';
+    pbg.appendChild(pf);pTd.appendChild(pbg);pTr.appendChild(pTd);tbody.appendChild(pTr);
+    const sep=document.createElement('tr');sep.className='sep';
+    const std=document.createElement('td');std.colSpan=days.length+1;sep.appendChild(std);tbody.appendChild(sep);
+  }
+  if(isUrban){
+    ghdr('Contrato 04 — Pele de Vidro Térreo (Pavimento 1)');
+    UP.forEach(addRow);
+    ghdr('Contrato 04 — Esquadrias (Pavimentos 2–9)');
+    UE.forEach(addRow);
+  }else{
+    ghdr('SMD — Oscilo batente (por pavimento)');
+    [SM[0]].forEach(addRow);
+    ghdr('SMD — Serviços por trecho');
+    SM.slice(1).forEach(addRow);
+  }
+  if(todI>=0){
+    setTimeout(()=>{
+      const sc=document.getElementById(tbId)?.closest('.tscroll');
+      if(!sc)return;
+      const cols=sc.querySelectorAll('.tod');
+      if(cols.length)sc.scrollLeft=Math.max(0,cols[0].offsetLeft-230);
+    },200);
+  }
+}
+
+// ─── BUILD ALL ───────────────────────────────────────────────────────────────
+function buildAll(){
+  buildKPI(URBAN_ROWS,U,'kpi-urban','#2c5f8a',new Date(2026,5,23));
+  buildAlerts(URBAN_ROWS,U,'al-urban','alt-badge-urban');
+  buildChart(URBAN_ROWS,U,'ch-urban','#2c5f8a','ch-leg-urban');
+  buildTable(URBAN_ROWS,U,'th-urban','tb-urban',U_TOD,true);
+  buildKPI(SM,S,'kpi-smd','#5a3e8a',new Date(2026,6,30));
+  buildAlerts(SM,S,'al-smd','alt-badge-smd');
+  buildChart(SM,S,'ch-smd','#5a3e8a','ch-leg-smd');
+  buildTable(SM,S,'th-smd','tb-smd',S_TOD,false);
+  if(typeof updateStickyTop==='function') setTimeout(updateStickyTop,50);
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+document.getElementById('ph-date').textContent=TODAY.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+document.getElementById('ft-date').textContent='Atualizado em '+TODAY.toLocaleDateString('pt-BR');
+loadState();
+buildAll();
+initFirebase();
+</script>
+</body>
+</html>
