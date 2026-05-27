@@ -34,6 +34,9 @@ body{background:#f2f1ed;color:#1a1a18;font-family:'IBM Plex Sans',sans-serif;fon
 .sync-ok{background:#d4f0e2;color:#1a7a52;border:1px solid #9fd8be;}
 .sync-mid{background:#faecd0;color:#c07a10;border:1px solid #f0d090;}
 .sync-off{background:#f0efe9;color:#9a9a90;border:1px solid #d8d7cf;}
+.online-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:4px;font-size:11px;font-family:'DM Mono',monospace;font-weight:500;background:#eef3f9;border:1px solid #b8d0e8;color:#2c5f8a;}
+.online-dot{width:7px;height:7px;border-radius:50%;background:#2e9e62;box-shadow:0 0 0 2px #b0e8c8;animation:pulse-dot 2s infinite;}
+@keyframes pulse-dot{0%,100%{box-shadow:0 0 0 2px #b0e8c8;}50%{box-shadow:0 0 0 4px #d4f0e2;}}
 #imp{display:none;}
 .edit-badge{display:none;align-items:center;gap:6px;padding:5px 12px;border-radius:5px;background:#faecd0;border:1px solid #f0d090;font-size:12px;color:#c07a10;font-weight:500;}
 .edit-badge.show{display:inline-flex;}
@@ -152,7 +155,8 @@ th,td{border:1px solid #e0dfd8;padding:0;}
 
 /* CHECKBOX — maior */
 .cbc{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;padding:1px;}
-.cbc input[type=checkbox]{width:14px;height:14px;cursor:pointer;}
+.cbc input[type=checkbox]{width:14px;height:14px;cursor:not-allowed;opacity:0.55;}
+.edit-mode .cbc input[type=checkbox]{cursor:pointer;opacity:1;}
 .cell.F .cbc input{accent-color:#c8a000;}
 .cell.I .cbc input{accent-color:#1a7a52;}
 .cell.R .cbc input{accent-color:#8b1a4a;}
@@ -307,6 +311,10 @@ th,td{border:1px solid #e0dfd8;padding:0;}
   </div>
   <div class="ph-actions">
     <span class="sync-badge sync-off" id="sync-status">◌ Conectando...</span>
+    <span class="online-badge" id="online-badge" title="Usuários online agora">
+      <span class="online-dot"></span>
+      <span id="online-count">—</span> online
+    </span>
     <div class="edit-badge" id="edit-badge">✏ Modo edição ativo — clique em qualquer célula</div>
     <button class="btn edit-off" id="btn-edit" onclick="toggleEdit()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -652,6 +660,49 @@ function initFirebase(){
     if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
     db = firebase.database();
     fbRef = db.ref(FB_PATH);
+
+    // ── PRESENCE: conta usuários online ──────────────────────────────────
+    const presenceRef = db.ref('amira/presence');
+    const connRef     = db.ref('.info/connected');
+    // ID único por sessão (tab)
+    const sessionId   = Math.random().toString(36).slice(2);
+    const myRef       = presenceRef.child(sessionId);
+
+    connRef.on('value', snap => {
+      if(!snap.val()) return; // desconectado
+      // Ao desconectar, remove esta sessão
+      myRef.onDisconnect().remove();
+      // Registra presença com timestamp
+      myRef.set({ at: Date.now() });
+    });
+
+    // Escuta contagem de presentes
+    presenceRef.on('value', snap => {
+      const count = snap.numChildren();
+      const el = document.getElementById('online-count');
+      if(el) el.textContent = count;
+      // Atualiza tooltip com singular/plural
+      const badge = document.getElementById('online-badge');
+      if(badge) badge.title = count === 1
+        ? '1 pessoa online agora'
+        : `${count} pessoas online agora`;
+    });
+
+    // Limpa sessões com mais de 30s sem update (aba fechada sem disconnect)
+    setInterval(()=>{
+      presenceRef.once('value').then(snap=>{
+        const now=Date.now();
+        snap.forEach(child=>{
+          const at=child.val()?.at||0;
+          if(now-at>30000) child.ref.remove();
+        });
+      });
+    }, 15000);
+
+    // Renova timestamp a cada 10s para manter presença viva
+    setInterval(()=>{ if(myRef) myRef.set({at:Date.now()}); }, 10000);
+    // ─────────────────────────────────────────────────────────────────────
+
     // Ouve mudanças em tempo real
     fbRef.on('value', snap => {
       if(skipNextFbWrite){ skipNextFbWrite=false; return; }
@@ -1200,8 +1251,16 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
         const wrap=document.createElement('div');wrap.className='cbc';
         const cb=document.createElement('input');cb.type='checkbox';
         cb.checked=!!(state[rid]&&state[rid][ai]);
+        // Checkbox só funciona no modo edição
+        cb.addEventListener('click',function(e){
+          if(!editMode){
+            e.preventDefault(); // bloqueia marcação fora do modo edição
+            return;
+          }
+          e.stopPropagation(); // impede abrir o modal ao clicar no checkbox
+        });
         cb.addEventListener('change',function(e){
-          if(editMode){e.preventDefault();e.stopPropagation();return;}
+          if(!editMode) return;
           if(!state[rid])state[rid]=[];
           state[rid][ai]=this.checked;
           saveState();buildAll();
@@ -1215,9 +1274,10 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
         td.appendChild(wrap);ci++;
       }
 
-      // Edit mode: click any non-weekend cell opens modal (feriados allowed with warning)
+      // Clique no td: abre modal de edição (só se não clicou no checkbox)
       td.addEventListener('click',function(e){
         if(!editMode) return;
+        if(e.target.type==='checkbox') return; // checkbox cuida de si mesmo
         e.stopPropagation();
         openModal(row.id,i,days,slot);
       });
