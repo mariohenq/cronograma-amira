@@ -200,33 +200,41 @@ th,td{border:1px solid #e0dfd8;padding:0;}
 
 /* PRINT */
 @media print{
-  @page{size:A4 landscape;margin:8mm;}
-  body{background:#fff;font-size:8px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  @page{size:A4 landscape;margin:6mm;}
+  body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  /* Hide screen-only elements */
   .ph,.ph-actions,.btn,.edit-badge,.toast,.footer,
-  .alerts-wrap,.ch-panel,.kpi-bar,.no-print{display:none!important;}
+  .alerts-wrap,.ch-panel,.kpi-bar,.no-print,
+  .modal-overlay{display:none!important;}
+  /* Show print dashboard */
+  .print-summary{display:block!important;}
   .main{padding:0;max-width:100%;}
-  .co{margin-bottom:10px;border:1px solid #ccc;border-radius:4px;overflow:visible;break-inside:avoid;}
+  .co{margin-bottom:6px;border:1px solid #ccc;border-radius:3px;overflow:visible;}
   .co.hidden-print{display:none!important;}
-  .co-banner{padding:6px 10px;}
-  .co-name{font-size:12px;}
-  .co-scope{font-size:8px;}
-  .crono-top{padding:4px 8px;}
-  .crono-lbl{font-size:9px;}
-  .leg{font-size:8px;}
-  .lbox{width:8px;height:8px;}
+  .co-banner{padding:5px 8px;}
+  .co-name{font-size:11px;}
+  .co-scope{font-size:7px;}
+  .crono-top{padding:3px 6px;}
+  .crono-lbl{font-size:8px;}
+  .leg{font-size:7px;}
+  .lbox{width:7px;height:7px;}
+  /* Scale table to fit */
   .tscroll{overflow:visible;width:100%;}
-  table{width:100%;min-width:unset;font-size:7px;}
-  .cd{min-width:110px;width:110px;font-size:8px;padding:2px 5px;position:static;}
-  .cd.hdr{font-size:7px;}
-  .cm{font-size:7px;padding:1px;}
-  .cday{min-width:13px;width:13px;font-size:6px;padding:1px 0;}
-  .cell{min-width:13px;width:13px;height:18px;}
-  .cbc input[type=checkbox]{width:9px;height:9px;}
-  .cpav{font-size:5px;}
-  .prl{font-size:7px;padding:1px 5px!important;}
-  .ghdr td{font-size:7px;padding:2px 5px;}
-  .sep td{height:2px;}
-  .pr td{font-size:7px;}
+  table{width:100%;min-width:unset;font-size:6px;table-layout:fixed;}
+  .cd{min-width:100px;width:100px;font-size:7px;padding:1px 4px;position:static;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cd.hdr{font-size:6px;}
+  .cm{font-size:6px;padding:1px;}
+  .cday{min-width:11px;width:11px;font-size:5px;padding:1px 0;}
+  .cell{min-width:11px;width:11px;height:15px;}
+  .cbc input[type=checkbox]{width:8px;height:8px;}
+  .cpav{font-size:4px;}
+  .prl{font-size:6px;padding:1px 4px!important;}
+  .ghdr td{font-size:6px;padding:2px 4px;}
+  .sep td{height:1px;}
+  .pr td{font-size:6px;}
+  /* Prevent page break inside table */
+  table{break-inside:auto;}
+  tr{break-inside:avoid;}
 }
 
 @media(max-width:700px){
@@ -754,53 +762,110 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 
 // ─── PRINT ──────────────────────────────────────────────────────────────────
 function printCompany(which){
-  // Build a mini summary table for print
   const rows=which==='urban'?URBAN_ROWS:SM;
   const days=which==='urban'?U:S;
   const color=which==='urban'?'#2c5f8a':'#5a3e8a';
+  const st=groupStats(rows,days);
+  const endDate=which==='urban'?new Date(2026,5,23):new Date(2026,6,30);
+  const dLeft=Math.max(0,Math.round((endDate-TODAY)/86400000));
+  const wdLeft=days.filter(d=>{const t=new Date(d.date);t.setHours(0,0,0,0);return t>=TODAY&&!isNonWorkday(d);}).length;
+  const sCls=st.late===0?'Em dia':st.late<=3?'Atenção':'Atrasado';
+  const sColor=st.late===0?'#1a7a52':st.late<=3?'#c07a10':'#b83030';
+  const done=st.done,late=st.late,pending=Math.max(0,st.total-done-late);
 
-  // Create/update a print-only summary div
+  // SVG donut chart inline
+  function donut(d,l,p,color){
+    const total=d+l+p||1;
+    const r=48,cx=60,cy=60,sw=18;
+    function arc(val,offset,col){
+      if(val===0)return '';
+      const pct=val/total;
+      if(pct>=1){
+        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${2*Math.PI*r} 0" stroke-dashoffset="${offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
+      }
+      const dash=pct*2*Math.PI*r;
+      return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash} ${2*Math.PI*r-dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    }
+    const c1=d/total*2*Math.PI*r, c2=l/total*2*Math.PI*r;
+    return `<svg width="120" height="120" viewBox="0 0 120 120">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#e8e7e0" stroke-width="${sw}"/>
+      ${arc(d,0,'#2e9e62')}
+      ${arc(l,c1,'#b83030')}
+      ${arc(p,c1+c2,color+'88')}
+      <text x="${cx}" y="${cy-5}" text-anchor="middle" font-size="14" font-weight="700" fill="${color}">${Math.round(d/total*100)}%</text>
+      <text x="${cx}" y="${cy+12}" text-anchor="middle" font-size="8" fill="#9a9a90">concluído</text>
+    </svg>`;
+  }
+
+  // Service rows table
+  const rowsHtml=rows.map(r=>{
+    const s=rowStats(r,days);
+    const barW=s.pct;
+    const barCol=s.late>0?'#b83030':s.pct===100?'#2e9e62':color;
+    const dStr=s.lateDays>0?`⚠ ${s.lateDays}d`:'—';
+    return `<tr>
+      <td style="padding:2px 5px;font-size:8px;border:1px solid #ddd;max-width:130px;">${r.lbl}</td>
+      <td style="padding:2px 5px;font-size:8px;text-align:center;border:1px solid #ddd;white-space:nowrap;">${s.done}/${s.total}</td>
+      <td style="padding:2px 5px;font-size:8px;text-align:center;border:1px solid #ddd;">
+        <div style="background:#e8e7e0;border-radius:2px;height:6px;width:60px;display:inline-block;vertical-align:middle;">
+          <div style="width:${barW}%;height:100%;background:${barCol};border-radius:2px;"></div>
+        </div>
+        <span style="font-size:7px;color:#5a5a52;margin-left:2px;">${s.pct}%</span>
+      </td>
+      <td style="padding:2px 5px;font-size:8px;text-align:center;border:1px solid #ddd;color:${s.lateDays>0?'#b83030':'#9a9a90'};">${dStr}</td>
+    </tr>`;
+  }).join('');
+
+  // Build/update print summary div
   let sumDiv=document.getElementById('print-summary-'+which);
   if(!sumDiv){
     sumDiv=document.createElement('div');
     sumDiv.id='print-summary-'+which;
     sumDiv.className='print-summary';
-    document.getElementById('co-'+which).insertBefore(sumDiv,document.getElementById('co-'+which).querySelector('.crono-top'));
+    const crono=document.getElementById('co-'+which).querySelector('.crono-top');
+    document.getElementById('co-'+which).insertBefore(sumDiv,crono);
   }
-  const st=groupStats(rows,days);
-  const endDate=which==='urban'?new Date(2026,5,23):new Date(2026,6,30);
-  const dLeft=Math.max(0,Math.round((endDate-TODAY)/86400000));
-  const sCls=st.late===0?'✅ Em dia':st.late<=3?'⚠ Atenção':'🔴 Atrasado';
-
-  let rowsHtml=rows.map(r=>{
-    const s=rowStats(r,days);
-    const bar=Math.round(s.pct);
-    const dStr=s.lateDays>0?`⚠ ${s.lateDays}d úteis`:'';
-    return `<tr>
-      <td style="padding:3px 6px;font-size:10px;border:1px solid #ddd;">${r.lbl}</td>
-      <td style="padding:3px 6px;font-size:10px;text-align:center;border:1px solid #ddd;">${s.done}/${s.total}</td>
-      <td style="padding:3px 6px;font-size:10px;text-align:center;border:1px solid #ddd;">${s.pct}%</td>
-      <td style="padding:3px 6px;font-size:10px;color:#b83030;border:1px solid #ddd;">${dStr}</td>
-    </tr>`;
-  }).join('');
 
   sumDiv.innerHTML=`
-    <div style="padding:10px 16px;background:#f8f7f3;border-bottom:1px solid #d8d7cf;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
-      <div><span style="font-size:11px;color:#9a9a90;text-transform:uppercase;letter-spacing:.05em;">Avanço</span><br>
-        <span style="font-size:22px;font-weight:600;color:${color};">${st.pct}%</span>
-        <span style="font-size:11px;color:#9a9a90;"> ${st.done}/${st.total}</span></div>
-      <div><span style="font-size:11px;color:#9a9a90;text-transform:uppercase;letter-spacing:.05em;">Status</span><br>
-        <span style="font-size:14px;font-weight:500;">${sCls}</span></div>
-      <div><span style="font-size:11px;color:#9a9a90;text-transform:uppercase;letter-spacing:.05em;">Dias restantes</span><br>
-        <span style="font-size:14px;font-weight:500;">${dLeft} corridos</span></div>
-      <div style="flex:1;min-width:200px;">
-        <table style="width:100%;border-collapse:collapse;">
-          <thead><tr style="background:#e8e7e0;">
-            <th style="padding:3px 6px;font-size:10px;text-align:left;border:1px solid #ddd;">Serviço</th>
-            <th style="padding:3px 6px;font-size:10px;border:1px solid #ddd;">Ckpts</th>
-            <th style="padding:3px 6px;font-size:10px;border:1px solid #ddd;">%</th>
-            <th style="padding:3px 6px;font-size:10px;border:1px solid #ddd;">Atraso</th>
-          </tr></thead>
+    <div style="display:flex;gap:0;border-bottom:2px solid ${color};background:#fff;align-items:stretch;">
+      <!-- DONUT -->
+      <div style="padding:10px 14px;display:flex;align-items:center;justify-content:center;border-right:1px solid #e0dfd8;flex-shrink:0;">
+        ${donut(done,late,pending,color)}
+      </div>
+      <!-- KPIs -->
+      <div style="display:flex;flex:1;align-items:stretch;">
+        <div style="padding:8px 12px;border-right:1px solid #e0dfd8;display:flex;flex-direction:column;justify-content:center;min-width:80px;">
+          <div style="font-size:7px;color:#9a9a90;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">Avanço</div>
+          <div style="font-size:20px;font-weight:700;color:${color};line-height:1;">${st.pct}%</div>
+          <div style="font-size:7px;color:#9a9a90;">${st.done} / ${st.total} ckpts</div>
+        </div>
+        <div style="padding:8px 12px;border-right:1px solid #e0dfd8;display:flex;flex-direction:column;justify-content:center;min-width:80px;">
+          <div style="font-size:7px;color:#9a9a90;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">Status</div>
+          <div style="font-size:13px;font-weight:600;color:${sColor};line-height:1.2;">${sCls}</div>
+          <div style="font-size:7px;color:#9a9a90;">${st.late} itens atrasados</div>
+        </div>
+        <div style="padding:8px 12px;border-right:1px solid #e0dfd8;display:flex;flex-direction:column;justify-content:center;min-width:80px;">
+          <div style="font-size:7px;color:#9a9a90;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">Dias úteis</div>
+          <div style="font-size:20px;font-weight:700;color:#1a1a18;line-height:1;">${wdLeft}</div>
+          <div style="font-size:7px;color:#9a9a90;">${dLeft} corridos restantes</div>
+        </div>
+        <div style="padding:8px 12px;display:flex;flex-direction:column;justify-content:center;min-width:80px;">
+          <div style="font-size:7px;color:#9a9a90;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;">Concluído</div>
+          <div style="font-size:20px;font-weight:700;color:#2e9e62;line-height:1;">${done}</div>
+          <div style="font-size:7px;color:#9a9a90;">Atrasado: ${late} · Pendente: ${pending}</div>
+        </div>
+      </div>
+      <!-- SERVICE TABLE -->
+      <div style="padding:6px 8px;border-left:1px solid #e0dfd8;flex-shrink:0;">
+        <table style="border-collapse:collapse;">
+          <thead>
+            <tr style="background:#e8e7e0;">
+              <th style="padding:2px 5px;font-size:7px;text-align:left;border:1px solid #ddd;font-weight:600;">Serviço</th>
+              <th style="padding:2px 5px;font-size:7px;border:1px solid #ddd;font-weight:600;">Ckpts</th>
+              <th style="padding:2px 5px;font-size:7px;border:1px solid #ddd;font-weight:600;">Progresso</th>
+              <th style="padding:2px 5px;font-size:7px;border:1px solid #ddd;font-weight:600;">Atraso</th>
+            </tr>
+          </thead>
           <tbody>${rowsHtml}</tbody>
         </table>
       </div>
