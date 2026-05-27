@@ -126,6 +126,8 @@ th,td{border:1px solid #e0dfd8;padding:0;}
 .cell.I{background:#e4f7ec;}
 /* Regulagem — verde escuro sutil */
 .cell.R{background:#c8edd8;}
+/* Regulagem — bordô */
+.cell.R{background:#f5e8ee;}
 /* Replanejamento IV — azul */
 .cell.P{background:#ddeaf8;}
 /* Fim de semana / feriado — vermelho claro */
@@ -136,9 +138,9 @@ th,td{border:1px solid #e0dfd8;padding:0;}
 /* Marcado: cor mais intensa */
 .cell.done.F{background:#f5d840;}
 .cell.done.I{background:#6ecf96;}
-.cell.done.R{background:#2e9e62;}
-.cell.done.R .cpav{color:#fff;}
-.cell.done.R .cbc input{accent-color:#fff;}
+.cell.done.R{background:#8b1a4a;}
+.cell.done.R .cpav{color:#f5e8ee;}
+.cell.done.R .cbc input{accent-color:#f5e8ee;}
 .cell.done.P{background:#7aabdc;}
 /* Atrasado — apenas cor original do tipo, sem destaque adicional */
 .cell.late .cpav{color:#888;}
@@ -153,16 +155,16 @@ th,td{border:1px solid #e0dfd8;padding:0;}
 .cbc input[type=checkbox]{width:14px;height:14px;cursor:pointer;}
 .cell.F .cbc input{accent-color:#c8a000;}
 .cell.I .cbc input{accent-color:#1a7a52;}
-.cell.R .cbc input{accent-color:#0f5c38;}
+.cell.R .cbc input{accent-color:#8b1a4a;}
 .cell.P .cbc input{accent-color:#2c5f8a;}
 .cell.late .cbc input{accent-color:#b83030;}
 .cell.done.F .cbc input{accent-color:#a07800;}
 .cell.done.I .cbc input{accent-color:#0a6a42;}
-.cell.done.R .cbc input{accent-color:#fff;}
+.cell.done.R .cbc input{accent-color:#f5e8ee;}
 .cell.done.P .cbc input{accent-color:#1a4a70;}
 .cpav{font-size:8px;font-weight:500;color:#bbb;line-height:1;font-family:'DM Mono',monospace;}
 .cell.done .cpav{color:#5a5a52;}
-.cell.done.R .cpav{color:#fff;}
+.cell.done.R .cpav{color:#f5e8ee;}
 .cell.late .cpav{color:#b83030;}
 
 /* PROG ROW */
@@ -363,11 +365,11 @@ th,td{border:1px solid #e0dfd8;padding:0;}
       <div class="legend">
         <div class="leg"><div class="lbox" style="background:#fef9e0;border:1px solid #e8d060;"></div>Fábrica / Produção</div>
         <div class="leg"><div class="lbox" style="background:#e4f7ec;border:1px solid #6ecf96;"></div>Instalação obra</div>
-        <div class="leg"><div class="lbox" style="background:#c8edd8;border:1px solid #2e9e62;"></div>Regulagem</div>
+        <div class="leg"><div class="lbox" style="background:#f5e8ee;border:1px solid #8b1a4a;"></div>Regulagem</div>
         <div class="leg"><div class="lbox" style="background:#ddeaf8;border:1px solid #7aabdc;"></div>Replanejamento</div>
         <div class="leg"><div class="lbox" style="background:#f5d840;border:1px solid #c8a000;"></div>Fábrica ✓</div>
         <div class="leg"><div class="lbox" style="background:#6ecf96;border:1px solid #1a7a52;"></div>Instalação ✓</div>
-        <div class="leg"><div class="lbox" style="background:#2e9e62;border:1px solid #0f5c38;"></div>Regulagem ✓</div>
+        <div class="leg"><div class="lbox" style="background:#8b1a4a;border:1px solid #5a0f2e;"></div>Regulagem ✓</div>
         <div class="leg"><div class="lbox" style="background:#7aabdc;border:1px solid #2c5f8a;"></div>Replanejamento ✓</div>
         <div class="leg"><div class="lbox" style="background:#fce8e8;border:1px solid #e0a0a0;"></div>Sáb / Dom / Feriado</div>
       </div>
@@ -888,18 +890,30 @@ function toggleAlerts(which){
 // ─── EDIT MODE ──────────────────────────────────────────────────────────────
 let editMode=false;
 let pendingEdit=null;
-function toggleEdit(){
+// sha256('amira') — não armazena senha em texto puro
+const AMIRA_HASH='0ab2e6e613f5649e56113e5ea413b96e209040c27bd7dccb720801e905e29c9d';
+async function sha256(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function toggleEdit(){
+  if(!editMode){
+    const pwd=window.prompt('🔒 Senha para modo edição:');
+    if(pwd===null) return; // cancelou
+    const h=await sha256(pwd.trim().toLowerCase());
+    if(h!==AMIRA_HASH){ toast('Senha incorreta.'); return; }
+  }
   editMode=!editMode;
   const btn=document.getElementById('btn-edit');
   const badge=document.getElementById('edit-badge');
   btn.className='btn '+(editMode?'edit-on':'edit-off');
   badge.className='edit-badge'+(editMode?' show':'');
   document.querySelectorAll('.tscroll').forEach(el=>el.classList.toggle('edit-mode',editMode));
-  // Show/hide calendar edit buttons
   ['urban','smd'].forEach(w=>{
     const b=document.getElementById('cal-btn-'+w);
     if(b) b.style.display=editMode?'inline-flex':'none';
   });
+  if(!editMode) toast('Modo edição desativado.');
 }
 
 // ─── CALENDAR DATE MODAL ────────────────────────────────────────────────────
@@ -1223,7 +1237,7 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
     const pf=document.createElement('div');pf.className='prbf';
     pf.style.width=s.pct+'%';
     const hasR=sl.some(x=>x&&x.t==='R');
-    pf.style.background=s.late>0?'#b83030':s.pct===100?'#1a7a52':hasR?'#2e9e62':'#3a6fa0';
+    pf.style.background=s.late>0?'#b83030':s.pct===100?'#1a7a52':hasR?'#8b1a4a':'#3a6fa0';
     pbg.appendChild(pf);pTd.appendChild(pbg);pTr.appendChild(pTd);tbody.appendChild(pTr);
     const sep=document.createElement('tr');sep.className='sep';
     const std=document.createElement('td');std.colSpan=days.length+1;sep.appendChild(std);tbody.appendChild(sep);
