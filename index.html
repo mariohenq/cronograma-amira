@@ -178,6 +178,12 @@ th,td{border:1px solid #e0dfd8;padding:0;}
 .prbg{height:5px;background:#e0dfd8;border-radius:2px;overflow:hidden;}
 .prbf{height:100%;border-radius:2px;transition:width .4s;}
 
+/* Linha + nova atividade: oculta fora do modo edição */
+.plus-row{display:none;}
+.edit-mode .plus-row{display:table-row;}
+/* Botão excluir linha extra: oculto fora do modo edição */
+.del-extra{display:none!important;}
+.edit-mode .del-extra{display:inline-flex!important;}
 /* SEP */
 .sep td{height:4px;background:#f0efe9;}
 
@@ -284,7 +290,25 @@ th,td{border:1px solid #e0dfd8;padding:0;}
   </div>
 </div>
 
-<!-- CALENDAR DATE MODAL -->
+<!-- NEW ROW MODAL -->
+<div class="modal-overlay" id="newrow-overlay">
+  <div class="modal" style="max-width:400px;">
+    <h3>Nova linha de atividade</h3>
+    <div class="modal-info" id="newrow-group"></div>
+    <label>Nome da atividade</label>
+    <input type="text" id="newrow-lbl" placeholder="ex: Esquadrias corredor" style="width:100%;padding:7px 10px;border:1px solid #c8c7be;border-radius:5px;font-size:13px;font-family:'IBM Plex Sans',sans-serif;color:#1a1a18;background:#fff;margin-bottom:14px;">
+    <label>Contrato</label>
+    <input type="text" id="newrow-ctr" placeholder="ex: 04, SMD" style="width:100%;padding:7px 10px;border:1px solid #c8c7be;border-radius:5px;font-size:13px;font-family:'IBM Plex Sans',sans-serif;color:#1a1a18;background:#fff;margin-bottom:6px;">
+    <div style="font-size:11px;color:#9a9a90;margin-bottom:14px;">Após criar, use o modo edição para preencher as células dia a dia.</div>
+    <div class="modal-btns">
+      <button class="btn save" onclick="newRowSave()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Criar linha
+      </button>
+      <button class="btn cancel" onclick="newRowClose()">Cancelar</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="cal-overlay">
   <div class="modal" style="max-width:380px;">
     <h3 id="cal-title">Editar datas do calendário</h3>
@@ -756,7 +780,8 @@ function getSlots(row){
   return base;
 }
 function initState(){
-  [...URBAN_ROWS,...SM].forEach(r=>{
+  const allRows=[...URBAN_ROWS,...SM,...extraRows.urban,...extraRows.smd];
+  allRows.forEach(r=>{
     const cnt=getSlots(r).filter(Boolean).length;
     if(!state[r.id])state[r.id]=new Array(cnt).fill(false);
     else if(state[r.id].length!==cnt){
@@ -787,6 +812,7 @@ function loadState(){
       }
     }
   }catch(e){}
+  restoreExtraRows();
   initState();
 }
 function saveState(){
@@ -967,7 +993,56 @@ async function toggleEdit(){
   if(!editMode) toast('Modo edição desativado.');
 }
 
-// ─── CALENDAR DATE MODAL ────────────────────────────────────────────────────
+// ─── EXTRA ROWS (linhas adicionadas pelo usuário) ───────────────────────────
+// Formato: { id, lbl, ctr, group } — slots gerenciados via extraSlots normalmente
+let extraRows = { urban: [], smd: [] };
+
+function allUrbanRows(){ return [...URBAN_ROWS, ...extraRows.urban]; }
+function allSmdRows(){   return [...SM,          ...extraRows.smd];   }
+
+let pendingNewRow = null;
+function openNewRowModal(which, group){
+  pendingNewRow = { which, group };
+  document.getElementById('newrow-group').textContent =
+    (which==='urban'?'URBAN':'SMD') + ' — ' + group;
+  document.getElementById('newrow-lbl').value = '';
+  document.getElementById('newrow-ctr').value = which==='urban'?'04':'SMD';
+  document.getElementById('newrow-overlay').classList.add('show');
+  setTimeout(()=>document.getElementById('newrow-lbl').focus(), 80);
+}
+function newRowClose(){ document.getElementById('newrow-overlay').classList.remove('show'); pendingNewRow=null; }
+function newRowSave(){
+  if(!pendingNewRow) return;
+  const lbl = document.getElementById('newrow-lbl').value.trim();
+  const ctr = document.getElementById('newrow-ctr').value.trim() || '—';
+  if(!lbl){ toast('Digite o nome da atividade.'); return; }
+  const { which } = pendingNewRow;
+  const uid = 'extra_' + Date.now();
+  const days = which==='urban' ? U : S;
+  const newRow = { id: uid, lbl, ctr, sl: new Array(days.length).fill(null) };
+  extraRows[which].push(newRow);
+  state[uid] = [];
+  // Persist extraRows in extraSlots meta
+  if(!extraSlots.__extraRows) extraSlots.__extraRows = {};
+  extraSlots.__extraRows[uid] = { lbl, ctr, which };
+  saveState(); buildAll(); newRowClose();
+  toast('Linha "'+lbl+'" criada.');
+}
+document.getElementById('newrow-overlay').addEventListener('click',function(e){ if(e.target===this) newRowClose(); });
+
+// Restore extraRows from saved state
+function restoreExtraRows(){
+  const meta = extraSlots.__extraRows || {};
+  Object.keys(meta).forEach(uid => {
+    const { lbl, ctr, which } = meta[uid];
+    const days = which==='urban' ? U : S;
+    const existing = extraRows[which].find(r=>r.id===uid);
+    if(!existing){
+      extraRows[which].push({ id: uid, lbl, ctr, sl: new Array(days.length).fill(null) });
+    }
+    if(!state[uid]) state[uid] = [];
+  });
+}
 let pendingCal=null;
 function openCalModal(which){
   pendingCal=which;
@@ -1200,6 +1275,28 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
     ctrDiv.textContent='Contrato '+row.ctr;
     td0.appendChild(lblDiv);td0.appendChild(ctrDiv);
 
+    // Extra row: show delete button in edit mode
+    const isExtra = row.id.startsWith('extra_');
+    if(isExtra){
+      const delBtn=document.createElement('button');
+      delBtn.className='btn del del-extra';
+      delBtn.style.cssText='font-size:9px;padding:2px 6px;margin-top:3px;';
+      delBtn.title='Excluir esta linha';
+      delBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg> Excluir';
+      delBtn.addEventListener('click',e=>{
+        e.stopPropagation();
+        if(!confirm('Excluir a linha "'+row.lbl+'"?')) return;
+        const which = extraRows.urban.find(r=>r.id===row.id) ? 'urban' : 'smd';
+        extraRows[which] = extraRows[which].filter(r=>r.id!==row.id);
+        delete state[row.id];
+        if(extraSlots.__extraRows) delete extraSlots.__extraRows[row.id];
+        if(extraSlots[row.id]) delete extraSlots[row.id];
+        saveState(); buildAll();
+        toast('Linha excluída.');
+      });
+      td0.appendChild(delBtn);
+    }
+
     // In edit mode: click lblDiv directly opens inline input
     lblDiv.addEventListener('click',function(e){
       if(!editMode) return;
@@ -1302,16 +1399,36 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
     const sep=document.createElement('tr');sep.className='sep';
     const std=document.createElement('td');std.colSpan=days.length+1;sep.appendChild(std);tbody.appendChild(sep);
   }
+  // helper: add "+" row — sempre renderiza, visível só no modo edição
+  function addPlusRow(which, groupLabel){
+    const tr=document.createElement('tr');tr.className='plus-row';
+    const td=document.createElement('td');
+    td.colSpan=days.length+1;
+    td.style.cssText='padding:4px 10px;background:#f8f7f3;border-top:1px dashed #d8d7cf;';
+    const btn=document.createElement('button');
+    btn.className='btn';
+    btn.style.cssText='font-size:11px;padding:4px 10px;border-style:dashed;color:#2c5f8a;border-color:#2c5f8a;';
+    btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nova linha';
+    btn.addEventListener('click',e=>{ e.stopPropagation(); openNewRowModal(which, groupLabel); });
+    td.appendChild(btn);tr.appendChild(td);tbody.appendChild(tr);
+  }
+
   if(isUrban){
-    ghdr('Contrato 04 — Pele de Vidro Térreo (Pavimento 1)');
-    UP.forEach(addRow);
-    ghdr('Contrato 04 — Esquadrias (Pavimentos 2–9)');
-    UE.forEach(addRow);
+    const g1='Contrato 04 — Pele de Vidro Térreo (Pavimento 1)';
+    const g2='Contrato 04 — Esquadrias (Pavimentos 2–9)';
+    ghdr(g1); UP.forEach(addRow); addPlusRow('urban',g1);
+    ghdr(g2); UE.forEach(addRow);
+    // extra rows urban
+    extraRows.urban.forEach(addRow);
+    addPlusRow('urban',g2);
   }else{
-    ghdr('SMD — Oscilo batente (por pavimento)');
-    [SM[0]].forEach(addRow);
-    ghdr('SMD — Serviços por trecho');
-    SM.slice(1).forEach(addRow);
+    const g1='SMD — Oscilo batente (por pavimento)';
+    const g2='SMD — Serviços por trecho';
+    ghdr(g1); [SM[0]].forEach(addRow); addPlusRow('smd',g1);
+    ghdr(g2); SM.slice(1).forEach(addRow);
+    // extra rows smd
+    extraRows.smd.forEach(addRow);
+    addPlusRow('smd',g2);
   }
   if(todI>=0){
     setTimeout(()=>{
@@ -1325,13 +1442,15 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
 
 // ─── BUILD ALL ───────────────────────────────────────────────────────────────
 function buildAll(){
-  buildKPI(URBAN_ROWS,U,'kpi-urban','#2c5f8a',new Date(2026,5,23));
-  buildAlerts(URBAN_ROWS,U,'al-urban','alt-badge-urban');
-  buildChart(URBAN_ROWS,U,'ch-urban','#2c5f8a','ch-leg-urban');
+  const uRows=allUrbanRows();
+  const sRows=allSmdRows();
+  buildKPI(uRows,U,'kpi-urban','#2c5f8a',new Date(2026,5,23));
+  buildAlerts(uRows,U,'al-urban','alt-badge-urban');
+  buildChart(uRows,U,'ch-urban','#2c5f8a','ch-leg-urban');
   buildTable(URBAN_ROWS,U,'th-urban','tb-urban',U_TOD,true);
-  buildKPI(SM,S,'kpi-smd','#5a3e8a',new Date(2026,6,30));
-  buildAlerts(SM,S,'al-smd','alt-badge-smd');
-  buildChart(SM,S,'ch-smd','#5a3e8a','ch-leg-smd');
+  buildKPI(sRows,S,'kpi-smd','#5a3e8a',new Date(2026,6,30));
+  buildAlerts(sRows,S,'al-smd','alt-badge-smd');
+  buildChart(sRows,S,'ch-smd','#5a3e8a','ch-leg-smd');
   buildTable(SM,S,'th-smd','tb-smd',S_TOD,false);
   if(typeof updateStickyTop==='function') setTimeout(updateStickyTop,50);
 }
