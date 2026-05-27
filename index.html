@@ -355,11 +355,11 @@ th,td{border:1px solid #e0dfd8;padding:0;}
     </div>
     <div class="kpi-bar" id="kpi-urban"></div>
     <div class="alerts-wrap">
-      <div class="alerts-toggle" id="alt-urban" onclick="toggleAlerts('urban')">
+      <div class="alerts-toggle open" id="alt-urban" onclick="toggleAlerts('urban')">
         <span>Alertas de execução <span class="badge" id="alt-badge-urban">0</span></span>
         <span class="chevron">▼</span>
       </div>
-      <div class="alerts-body" id="al-urban"></div>
+      <div class="alerts-body open" id="al-urban"></div>
     </div>
     <div class="ch-panel">
       <div class="ch-title">Situação — URBAN</div>
@@ -399,11 +399,11 @@ th,td{border:1px solid #e0dfd8;padding:0;}
     </div>
     <div class="kpi-bar" id="kpi-smd"></div>
     <div class="alerts-wrap">
-      <div class="alerts-toggle" id="alt-smd" onclick="toggleAlerts('smd')">
+      <div class="alerts-toggle open" id="alt-smd" onclick="toggleAlerts('smd')">
         <span>Alertas de execução <span class="badge" id="alt-badge-smd">0</span></span>
         <span class="chevron">▼</span>
       </div>
-      <div class="alerts-body" id="al-smd"></div>
+      <div class="alerts-body open" id="al-smd"></div>
     </div>
     <div class="ch-panel">
       <div class="ch-title">Situação — SMD</div>
@@ -931,7 +931,7 @@ function printCompany(which){
 }
 
 // ─── ALERTS TOGGLE ──────────────────────────────────────────────────────────
-const alertsOpen={urban:false,smd:false};
+const alertsOpen={urban:true,smd:true};
 function toggleAlerts(which){
   alertsOpen[which]=!alertsOpen[which];
   document.getElementById('al-'+which).classList.toggle('open',alertsOpen[which]);
