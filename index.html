@@ -328,6 +328,33 @@ th,td{border:1px solid #e0dfd8;padding:0;}
   </div>
 </div>
 
+<!-- RELATÓRIO MODAL -->
+<div class="modal-overlay" id="rel-overlay" style="align-items:flex-start;padding:20px;overflow-y:auto;">
+  <div class="modal" style="max-width:760px;width:100%;margin:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h3 style="font-size:16px;">📋 Relatório / Ata de Reunião</h3>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" id="rel-copy-btn" onclick="relCopy()" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar
+        </button>
+        <button class="btn print-btn" id="rel-print-btn" onclick="relPrint()" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Imprimir
+        </button>
+        <button class="btn cancel" onclick="relClose()">✕ Fechar</button>
+      </div>
+    </div>
+    <!-- Content -->
+    <div id="rel-content" style="display:none;font-size:13px;line-height:1.8;color:#1a1a18;white-space:pre-wrap;font-family:'IBM Plex Sans',sans-serif;background:#f8f7f3;border:1px solid #d8d7cf;border-radius:6px;padding:20px;max-height:70vh;overflow-y:auto;"></div>
+    <div id="rel-error" style="display:none;color:#b83030;font-size:13px;padding:16px;background:#fde8e8;border-radius:6px;"></div>
+  </div>
+</div>
+
+<style>
+@keyframes dot-blink{0%,100%{opacity:.2;}50%{opacity:1;}}
+</style>
+
 <div class="ph">
   <div>
     <h1>Cronograma Esquadrias — <em>Amira</em></h1>
@@ -355,6 +382,10 @@ th,td{border:1px solid #e0dfd8;padding:0;}
     <button class="btn exp" onclick="exportData()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Exportar
+    </button>
+    <button class="btn" style="border-color:#5a3e8a;color:#5a3e8a;" onclick="openRelatorio()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Relatório
     </button>
     <button class="btn" onclick="document.getElementById('imp').click()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><line x1="12" y1="3" x2="12" y2="15"/><polyline points="17 8 12 3 7 8"/></svg>
@@ -1440,7 +1471,182 @@ function buildTable(rows,days,thId,tbId,todI,isUrban){
   }
 }
 
-// ─── BUILD ALL ───────────────────────────────────────────────────────────────
+// ─── RELATÓRIO / ATA — JS PURO, SEM API ─────────────────────────────────────
+function gerarAta(){
+  const hoje = TODAY.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  const hojeAbrev = TODAY.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  // Próxima semana: seg a sex
+  const nextWeekStart = new Date(TODAY); nextWeekStart.setDate(TODAY.getDate()+1);
+  const nextWeekEnd   = new Date(TODAY); nextWeekEnd.setDate(TODAY.getDate()+7);
+
+  function analisaEmpresa(rows, days, nomeEmpresa, contrato, periodo){
+    const st = groupStats(rows, days);
+    const atrasadas = [];
+    const proxSemana = [];
+    const emExecucao = [];
+
+    rows.forEach(row => {
+      const sl = getSlots(row);
+      const s  = rowStats(row, days);
+      const atrasosDaLinha = [];
+      const proxDaLinha = [];
+      const execDaLinha = [];
+      let ci = 0;
+
+      sl.forEach((slot, i) => {
+        if(!slot || isNonWorkday(days[i])) return;
+        const dt = new Date(days[i].date); dt.setHours(0,0,0,0);
+        const done = !!(state[row.id] && state[row.id][ci]);
+        const pav  = slot.p !== null && slot.p !== undefined
+          ? (typeof slot.p === 'string' ? ` (${slot.p})` : ` (${slot.p}º pav.)`) : '';
+        const dStr = dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+
+        if(!done && dt < TODAY)                             atrasosDaLinha.push(dStr+pav);
+        else if(!done && dt >= nextWeekStart && dt <= nextWeekEnd) proxDaLinha.push(dStr+pav);
+        else if(!done && dt >= TODAY && dt <= nextWeekStart)       execDaLinha.push(dStr+pav);
+        ci++;
+      });
+
+      if(atrasosDaLinha.length > 0){
+        atrasadas.push({
+          nome: row.lbl, pct: s.pct, lateDays: s.lateDays,
+          datas: atrasosDaLinha.slice(0,6),
+          total: s.total, done: s.done
+        });
+      }
+      if(proxDaLinha.length > 0){
+        proxSemana.push({ nome: row.lbl, datas: proxDaLinha.slice(0,5) });
+      }
+      if(execDaLinha.length > 0 && atrasosDaLinha.length === 0){
+        emExecucao.push({ nome: row.lbl, datas: execDaLinha.slice(0,4) });
+      }
+    });
+
+    return { nomeEmpresa, contrato, periodo, st, atrasadas, proxSemana, emExecucao };
+  }
+
+  const urban = analisaEmpresa(allUrbanRows(), U, 'URBAN', 'Contrato 04', '24/04/2026 – 23/06/2026');
+  const smd   = analisaEmpresa(allSmdRows(),   S, 'SMD',   'SMD',        '18/05/2026 – 30/07/2026');
+
+  // Status geral
+  const statusGeral = (st) => {
+    if(st.late === 0) return 'em dia';
+    if(st.late <= 3)  return 'com pontos de atenção';
+    return 'com atrasos críticos';
+  };
+
+  // Monta o texto da ata
+  const linhas = [];
+
+  linhas.push(`ATA DE REUNIÃO DE ACOMPANHAMENTO ESQUADRIAS`);
+  linhas.push(`Data: ${hoje}`);
+  linhas.push(`─────────────────────────────────────────────────────────`);
+  linhas.push(``);
+
+  // 1. Avanço geral
+  linhas.push(`1. AVANÇO GERAL`);
+  linhas.push(``);
+  [urban, smd].forEach(emp => {
+    const s = emp.st;
+    linhas.push(`  ${emp.nomeEmpresa} (${emp.contrato} | ${emp.periodo})`);
+    linhas.push(`  Avanço: ${s.pct}% — ${s.done}/${s.total} checkpoints concluídos`);
+    linhas.push(`  Status: ${statusGeral(s)}${s.late > 0 ? ` — ${s.late} item${s.late>1?'s':''} pendente${s.late>1?'s':''} em atraso` : ''}`);
+    linhas.push(``);
+  });
+
+  // 2. Pontos de atenção / atrasos
+  const temAtraso = urban.atrasadas.length > 0 || smd.atrasadas.length > 0;
+  linhas.push(`2. PONTOS DE ATENÇÃO${temAtraso ? '' : ' — Nenhum atraso identificado'}`);
+  linhas.push(``);
+
+  [urban, smd].forEach(emp => {
+    if(emp.atrasadas.length === 0) return;
+    linhas.push(`  ${emp.nomeEmpresa}:`);
+    emp.atrasadas.forEach(a => {
+      const diasStr = a.lateDays > 0 ? ` — ${a.lateDays} dia${a.lateDays>1?'s':''} úteis em atraso` : '';
+      linhas.push(`  • ${a.nome}: ${a.pct}% concluído (${a.done}/${a.total})${diasStr}`);
+      if(a.datas.length > 0) linhas.push(`    Datas pendentes: ${a.datas.join(', ')}`);
+    });
+    linhas.push(``);
+  });
+
+  // 3. Programação próxima semana
+  const temProx = urban.proxSemana.length > 0 || smd.proxSemana.length > 0;
+  linhas.push(`3. PROGRAMAÇÃO DA PRÓXIMA SEMANA${temProx ? '' : ' — Nenhuma atividade prevista no período'}`);
+  linhas.push(``);
+
+  [urban, smd].forEach(emp => {
+    const itens = [...emp.emExecucao, ...emp.proxSemana];
+    if(itens.length === 0) return;
+    linhas.push(`  ${emp.nomeEmpresa}:`);
+    itens.forEach(a => {
+      linhas.push(`  • ${a.nome}: previsto para ${a.datas.join(', ')}`);
+    });
+    linhas.push(``);
+  });
+
+  return linhas.join('\n');
+}
+
+let relCurrentText = '';
+
+function openRelatorio(){
+  document.getElementById('rel-overlay').classList.add('show');
+  document.getElementById('rel-content').style.display  = 'none';
+  document.getElementById('rel-error').style.display    = 'none';
+  document.getElementById('rel-copy-btn').style.display  = 'none';
+  document.getElementById('rel-print-btn').style.display = 'none';
+
+  try{
+    relCurrentText = gerarAta();
+
+    const formatted = relCurrentText
+      .replace(/^(ATA DE REUNIÃO.*|Empreendimento:.*|Data:.*|Elaborado por:.*|─+)$/gm,
+        s => `<span style="font-weight:600;">${s}</span>`)
+      .replace(/^(\s*\d+\. .+)$/gm,
+        s => `<strong>${s}</strong>`)
+      .replace(/\n/g, '<br>');
+
+    document.getElementById('rel-content').innerHTML       = formatted;
+    document.getElementById('rel-content').style.display   = 'block';
+    document.getElementById('rel-copy-btn').style.display  = 'inline-flex';
+    document.getElementById('rel-print-btn').style.display = 'inline-flex';
+  } catch(e){
+    document.getElementById('rel-error').textContent    = 'Erro ao gerar ata: ' + e.message;
+    document.getElementById('rel-error').style.display  = 'block';
+    console.error(e);
+  }
+}
+
+function relClose(){
+  document.getElementById('rel-overlay').classList.remove('show');
+  relCurrentText = '';
+}
+
+function relCopy(){
+  if(!relCurrentText) return;
+  navigator.clipboard.writeText(relCurrentText)
+    .then(()  => toast('Ata copiada para a área de transferência!'))
+    .catch(()  => toast('Erro ao copiar.'));
+}
+
+function relPrint(){
+  const content = document.getElementById('rel-content').innerHTML;
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Ata — Amira — ${TODAY.toLocaleDateString('pt-BR')}</title>
+    <style>
+      body{font-family:'IBM Plex Sans',sans-serif;font-size:13px;line-height:1.8;
+           max-width:720px;margin:40px auto;color:#1a1a18;}
+      strong{font-weight:600;}
+    </style></head><body>${content}</body></html>`);
+  w.document.close(); w.print();
+}
+
+document.getElementById('rel-overlay').addEventListener('click', function(e){
+  if(e.target === this) relClose();
+});
 function buildAll(){
   const uRows=allUrbanRows();
   const sRows=allSmdRows();
